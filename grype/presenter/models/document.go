@@ -21,12 +21,13 @@ type Document struct {
 	Source          *source         `json:"source"`
 	Distro          distribution    `json:"distro"`
 	Descriptor      descriptor      `json:"descriptor"`
+	StartTimestamp string         `json:"-"`
 }
 
 // NewDocument creates and populates a new Document struct, representing the populated JSON document.
 //
 //nolint:staticcheck // MetadataProvider is deprecated but still used internally
-func NewDocument(id clio.Identification, packages []pkg.Package, context pkg.Context, matches match.Matches, ignoredMatches []match.IgnoredMatch, metadataProvider vulnerability.MetadataProvider, appConfig any, dbInfo any, strategy SortStrategy, outputTimestamp bool, distroAlerts *DistroAlertData) (Document, error) {
+func NewDocument(id clio.Identification, packages []pkg.Package, context pkg.Context, matches match.Matches, ignoredMatches []match.IgnoredMatch, metadataProvider vulnerability.MetadataProvider, appConfig any, dbInfo any, strategy SortStrategy, outputTimestamp bool, distroAlerts *DistroAlertData, startTimestamp string) (Document, error) {
 	timestamp, err := createTimestamp(outputTimestamp)
 	if err != nil {
 		return Document{}, err
@@ -91,6 +92,7 @@ func NewDocument(id clio.Identification, packages []pkg.Package, context pkg.Con
 			DB:            dbInfo,
 			Timestamp:     timestamp,
 		},
+		StartTimestamp: startTimestamp,
 	}, nil
 }
 

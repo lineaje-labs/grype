@@ -120,6 +120,7 @@ var ignoreLinuxKernelHeaders = []match.IgnoreRule{
 
 //nolint:funlen
 func runGrype(ctx context.Context, app clio.Application, opts *options.Grype, userInput string) (errs error) {
+	timestamp := time.Now().Local().Round(0).Format(time.RFC3339)
 	writer, err := format.MakeScanResultWriter(opts.Outputs, opts.File, format.PresentationConfig{
 		TemplateFilePath: opts.OutputTemplateFile,
 		ShowSuppressed:   opts.ShowSuppressed,
@@ -260,7 +261,7 @@ func runGrype(ctx context.Context, app clio.Application, opts *options.Grype, us
 		warnDistroAlerts(distroAlertData)
 	}
 
-	model, err := models.NewDocument(app.ID(), packages, pkgContext, *remainingMatches, ignoredMatches, vp, opts, dbInfo(status, vp), models.SortStrategy(opts.SortBy.Criteria), opts.Timestamp, distroAlertData)
+	model, err := models.NewDocument(app.ID(), packages, pkgContext, *remainingMatches, ignoredMatches, vp, opts, dbInfo(status, vp), models.SortStrategy(opts.SortBy.Criteria), opts.Timestamp, distroAlertData, timestamp)
 	if err != nil {
 		return fmt.Errorf("failed to create document: %w", err)
 	}

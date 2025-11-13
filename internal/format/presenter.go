@@ -1,6 +1,7 @@
 package format
 
 import (
+	"github.com/anchore/grype/grype/presenter/lineaje"
 	"github.com/wagoodman/go-presenter"
 
 	"github.com/anchore/grype/grype/presenter/cyclonedx"
@@ -39,6 +40,8 @@ func GetPresenter(format Format, c PresentationConfig, pb models.PresenterConfig
 		return sarif.NewPresenter(pb)
 	case TemplateFormat:
 		return template.NewPresenter(pb, c.TemplateFilePath)
+	case LineajeFormat:
+		return lineaje.NewPresenter(pb)
 	// DEPRECATED TODO: remove in v1.0
 	case EmbeddedVEXJSON:
 		log.Warn("embedded-cyclonedx-vex-json format is deprecated and will be removed in v1.0")

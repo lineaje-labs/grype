@@ -13,6 +13,7 @@ const (
 	CycloneDXXML    Format = "cyclonedx-xml"
 	SarifFormat     Format = "sarif"
 	TemplateFormat  Format = "template"
+	LineajeFormat   Format = "lineaje"
 
 	// DEPRECATED <-- TODO: remove in v1.0
 	EmbeddedVEXJSON Format = "embedded-cyclonedx-vex-json"
@@ -45,6 +46,8 @@ func Parse(userInput string) Format {
 		return CycloneDXJSON
 	case strings.ToLower(CycloneDXXML.String()):
 		return CycloneDXXML
+	case strings.ToLower(LineajeFormat.String()):
+		return LineajeFormat
 	case strings.ToLower(EmbeddedVEXJSON.String()):
 		return CycloneDXJSON
 	case strings.ToLower(EmbeddedVEXXML.String()):
@@ -62,6 +65,7 @@ var AvailableFormats = []Format{
 	CycloneDXJSON,
 	SarifFormat,
 	TemplateFormat,
+	LineajeFormat,
 }
 
 // DeprecatedFormats TODO: remove in v1.0

@@ -112,6 +112,7 @@ var ignoreLinuxKernelHeaders = []match.IgnoreRule{
 
 //nolint:funlen
 func runGrype(app clio.Application, opts *options.Grype, userInput string) (errs error) {
+	timestamp := time.Now().Local().Round(0).Format(time.RFC3339)
 	writer, err := format.MakeScanResultWriter(opts.Outputs, opts.File, format.PresentationConfig{
 		TemplateFilePath: opts.OutputTemplateFile,
 		ShowSuppressed:   opts.ShowSuppressed,
@@ -236,7 +237,7 @@ func runGrype(app clio.Application, opts *options.Grype, userInput string) (errs
 	log.WithFields("time", time.Since(startTime)).Info("found vulnerability matches")
 	startTime = time.Now()
 
-	model, err := models.NewDocument(app.ID(), packages, pkgContext, *remainingMatches, ignoredMatches, vp, opts, dbInfo(status, vp), models.SortStrategy(opts.SortBy.Criteria), opts.Timestamp)
+	model, err := models.NewDocument(app.ID(), packages, pkgContext, *remainingMatches, ignoredMatches, vp, opts, dbInfo(status, vp), models.SortStrategy(opts.SortBy.Criteria), opts.Timestamp, timestamp)
 	if err != nil {
 		return fmt.Errorf("failed to create document: %w", err)
 	}

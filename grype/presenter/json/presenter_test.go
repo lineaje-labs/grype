@@ -80,7 +80,7 @@ func TestJsonDirsPresenter(t *testing.T) {
 }
 
 func TestEmptyJsonPresenter(t *testing.T) {
-	// Expected to have an empty JSON array back
+	// expected to have an empty JSON array back
 	var buffer bytes.Buffer
 
 	ctx := pkg.Context{
@@ -92,7 +92,7 @@ func TestEmptyJsonPresenter(t *testing.T) {
 		},
 	}
 
-	doc, err := models.NewDocument(clio.Identification{Name: "grype", Version: "[not provided]"}, nil, ctx, match.NewMatches(), nil, models.NewMetadataMock(), nil, nil, models.SortByPackage)
+	doc, err := models.NewDocument(clio.Identification{Name: "grype", Version: "[not provided]"}, nil, ctx, match.NewMatches(), nil, models.NewMetadataMock(), nil, nil, models.SortByPackage, true)
 	require.NoError(t, err)
 
 	pb := models.PresenterConfig{

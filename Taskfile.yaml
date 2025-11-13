@@ -40,7 +40,13 @@ tasks:
 
   ## High-level tasks #################################
 
+  # note: the default task should not run levels of test, only build the project.
   default:
+    desc: Build the project
+    cmds:
+      - task: build
+
+  validate:
     desc: Run all validation tasks
     aliases:
       - pr-validations
@@ -57,6 +63,7 @@ tasks:
       - task: check-licenses
       - task: lint
       - task: check-json-schema-drift
+      - task: check-db-schema-drift
 # TODO: while developing v6, we need to disable this check (since v5 and v6 are imported in the same codebase)
 #      - task: validate-grype-db-schema
 
@@ -76,7 +83,7 @@ tasks:
       - "{{ .TOOL_DIR }}/binny"
     status:
       - "test -f {{ .TOOL_DIR }}/binny"
-    cmd: "curl -sSfL https://raw.githubusercontent.com/anchore/binny/main/install.sh | sh -s -- -b .tool"
+    cmd: "curl -sSfL https://get.anchore.io/binny | sh -s -- -b .tool"
     silent: true
 
   tools:
@@ -176,6 +183,11 @@ tasks:
     cmds:
       - .github/scripts/json-schema-drift-check.sh
 
+  check-db-schema-drift:
+    desc: Ensure there is no drift between the database blob schemas and the code
+    cmds:
+      - .github/scripts/db-schema-drift-check.sh
+
   validate-grype-db-schema:
     desc: Ensure the codebase is only referencing a single grype-db schema version (multiple is not allowed)
     cmds:
@@ -203,7 +215,10 @@ tasks:
     desc: Run integration tests
     cmds:
       - "go test -v ./test/integration"
-      # exercise most of the CLI with the data race detector
+      # update database outside race detector, since doing so with
+      # race detector on is very slow
+      - "go run cmd/{{ .PROJECT }}/main.go db update"
+      # exercise most of the CLI with the data race detector enabled
       - "go run -race cmd/{{ .PROJECT }}/main.go alpine:latest"
 
   cli:
@@ -316,6 +331,7 @@ tasks:
     desc: Run code and data generation tasks
     cmds:
       - task: generate-json-schema
+      - task: generate-db-schema
 
   generate-json-schema:
     desc: Generate a new JSON schema
@@ -324,6 +340,12 @@ tasks:
       - "cd grype/internal && go generate"
       # generate the JSON schema for the CLI output
       - "cd cmd/grype/cli/commands/internal/jsonschema && go run ."
+
+  generate-db-schema:
+    desc: Generate database blob JSON schemas
+    cmds:
+      # generate the JSON schema for database blob types
+      - "cd grype/db/v6/schema && go run ."
 
 
   ## Build-related targets #################################
@@ -400,16 +422,6 @@ tasks:
       - cmd: "cat CHANGELOG.md"
         silent: true
       - "{{ .RELEASE_CMD }}"
-
-  ci-release-version-file:
-    # desc: "[CI only] Update the version file"
-    deps: [tools]
-    cmds:
-      - task: ci-check
-      - ".github/scripts/update-version-file.sh {{ .RELEASE_VERSION }}"
-    requires:
-      vars:
-        - RELEASE_VERSION
 
   ci-validate-test-config:
     # desc: "[CI only] Ensure the update URL is not overridden (not pointing to staging)"

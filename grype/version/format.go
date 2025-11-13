@@ -3,8 +3,7 @@ package version
 import (
 	"strings"
 
-	"github.com/anchore/grype/grype/pkg"
-	syftPkg "github.com/anchore/syft/syft/pkg"
+	"github.com/anchore/packageurl-go"
 )
 
 const (
@@ -20,6 +19,7 @@ const (
 	PortageFormat
 	GolangFormat
 	JVMFormat
+	BitnamiFormat
 )
 
 type Format int
@@ -37,6 +37,7 @@ var formatStr = []string{
 	"Portage",
 	"Go",
 	"JVM",
+	"Bitnami",
 }
 
 var Formats = []Format{
@@ -51,23 +52,27 @@ var Formats = []Format{
 	PortageFormat,
 	GolangFormat,
 	JVMFormat,
+	BitnamiFormat,
 }
 
 func ParseFormat(userStr string) Format {
 	switch strings.ToLower(userStr) {
-	case strings.ToLower(SemanticFormat.String()), "semver":
+	// sever includes known ecosystem types that use semver or a very semver-like schemes
+	case strings.ToLower(SemanticFormat.String()), "semver", packageurl.TypeNPM, packageurl.TypeNuget, packageurl.TypeComposer, packageurl.TypeHex, packageurl.TypePub, packageurl.TypeSwift, packageurl.TypeConan, packageurl.TypeCocoapods, packageurl.TypeHackage:
 		return SemanticFormat
 	case strings.ToLower(ApkFormat.String()), "apk":
 		return ApkFormat
-	case strings.ToLower(DebFormat.String()), "dpkg":
+	case strings.ToLower(BitnamiFormat.String()), "bitnami":
+		return BitnamiFormat
+	case strings.ToLower(DebFormat.String()), "dpkg", packageurl.TypeDebian:
 		return DebFormat
-	case strings.ToLower(GolangFormat.String()), "go":
+	case strings.ToLower(GolangFormat.String()), "go", packageurl.TypeGolang:
 		return GolangFormat
 	case strings.ToLower(MavenFormat.String()), "maven":
 		return MavenFormat
 	case strings.ToLower(RpmFormat.String()), "rpm":
 		return RpmFormat
-	case strings.ToLower(PythonFormat.String()), "python":
+	case strings.ToLower(PythonFormat.String()), "python", packageurl.TypePyPi, "pep440":
 		return PythonFormat
 	case strings.ToLower(KBFormat.String()), "kb":
 		return KBFormat
@@ -78,35 +83,6 @@ func ParseFormat(userStr string) Format {
 	case strings.ToLower(JVMFormat.String()), "jvm", "jre", "jdk", "openjdk", "jep223":
 		return JVMFormat
 	}
-	return UnknownFormat
-}
-
-func FormatFromPkg(p pkg.Package) Format {
-	switch p.Type {
-	case syftPkg.ApkPkg:
-		return ApkFormat
-	case syftPkg.DebPkg:
-		return DebFormat
-	case syftPkg.JavaPkg:
-		return MavenFormat
-	case syftPkg.RpmPkg:
-		return RpmFormat
-	case syftPkg.GemPkg:
-		return GemFormat
-	case syftPkg.PythonPkg:
-		return PythonFormat
-	case syftPkg.KbPkg:
-		return KBFormat
-	case syftPkg.PortagePkg:
-		return PortageFormat
-	case syftPkg.GoModulePkg:
-		return GolangFormat
-	}
-
-	if pkg.IsJvmPackage(p) {
-		return JVMFormat
-	}
-
 	return UnknownFormat
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -52,15 +53,15 @@ func TestAffectedPackageTableRowMarshalJSON(t *testing.T) {
 			Package:   &Package{Name: "pkg1", Ecosystem: "ecosystem1"},
 			CPE:       &CPE{Part: "a", Vendor: "vendor1", Product: "product1"},
 			Namespace: "namespace1",
-			Detail: v6.AffectedPackageBlob{
+			Detail: v6.PackageBlob{
 				CVEs: []string{"CVE-1234-5678"},
-				Qualifiers: &v6.AffectedPackageQualifiers{
+				Qualifiers: &v6.PackageQualifiers{
 					RpmModularity: ptr("modularity"),
 					PlatformCPEs:  []string{"platform-cpe-1"},
 				},
-				Ranges: []v6.AffectedRange{
+				Ranges: []v6.Range{
 					{
-						Version: v6.AffectedVersion{
+						Version: v6.Version{
 							Type:       "semver",
 							Constraint: ">=1.0.0, <2.0.0",
 						},
@@ -120,7 +121,7 @@ func TestAffectedPackageTableRowMarshalJSON(t *testing.T) {
     "name": "pkg1",
     "ecosystem": "ecosystem1"
   },
-  "cpe": "cpe:2.3:a:vendor1:product1:*:*:*:*:*:*",
+  "cpe": "cpe:2.3:a:vendor1:product1:*:*:*:*:*:*:*:*",
   "namespace": "namespace1",
   "detail": {
     "cves": [
@@ -169,17 +170,33 @@ func TestNewAffectedPackageRows(t *testing.T) {
 					Status:        "active",
 					PublishedDate: ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
 					ModifiedDate:  ptr(time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC)),
-					BlobValue:     &v6.VulnerabilityBlob{Description: "Test vulnerability"},
+					BlobValue: &v6.VulnerabilityBlob{
+						Description: "Test vulnerability",
+						Severities: []v6.Severity{
+							{
+								Scheme: "CVSS_V3",
+								Value: CVSSSeverity{
+									Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+									Version: "3.1",
+									Metrics: CvssMetrics{
+										BaseScore: 9.8,
+									},
+								},
+								Source: "nvd@nist.gov",
+								Rank:   1,
+							},
+						},
+					},
 				},
-				BlobValue: &v6.AffectedPackageBlob{
+				BlobValue: &v6.PackageBlob{
 					CVEs: []string{"CVE-1234-5678"},
-					Qualifiers: &v6.AffectedPackageQualifiers{
+					Qualifiers: &v6.PackageQualifiers{
 						RpmModularity: ptr("modularity"),
 						PlatformCPEs:  []string{"platform-cpe-1"},
 					},
-					Ranges: []v6.AffectedRange{
+					Ranges: []v6.Range{
 						{
-							Version: v6.AffectedVersion{
+							Version: v6.Version{
 								Type:       "semver",
 								Constraint: ">=1.0.0, <2.0.0",
 							},
@@ -227,11 +244,11 @@ func TestNewAffectedPackageRows(t *testing.T) {
 					Provider:  &v6.Provider{ID: "provider2"},
 					BlobValue: &v6.VulnerabilityBlob{Description: "CPE vulnerability description"},
 				},
-				BlobValue: &v6.AffectedPackageBlob{
+				BlobValue: &v6.PackageBlob{
 					CVEs: []string{"CVE-9876-5432"},
-					Ranges: []v6.AffectedRange{
+					Ranges: []v6.Range{
 						{
-							Version: v6.AffectedVersion{
+							Version: v6.Version{
 								Type:       "rpm",
 								Constraint: ">=2.0.0, <3.0.0",
 							},
@@ -274,11 +291,28 @@ func TestNewAffectedPackageRows(t *testing.T) {
 	expected := []AffectedPackage{
 		{
 			Vulnerability: VulnerabilityInfo{
-				VulnerabilityBlob: v6.VulnerabilityBlob{Description: "Test vulnerability"},
-				Provider:          "provider1",
-				Status:            "active",
-				PublishedDate:     ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
-				ModifiedDate:      ptr(time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC)),
+				VulnerabilityBlob: v6.VulnerabilityBlob{
+					Description: "Test vulnerability",
+					Severities: []v6.Severity{
+						{
+							Scheme: "CVSS_V3",
+							Value: CVSSSeverity{
+								Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+								Version: "3.1",
+								Metrics: CvssMetrics{
+									BaseScore: 9.8,
+								},
+							},
+							Source: "nvd@nist.gov",
+							Rank:   1,
+						},
+					},
+				},
+				Severity:      "critical",
+				Provider:      "provider1",
+				Status:        "active",
+				PublishedDate: ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
+				ModifiedDate:  ptr(time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC)),
 				KnownExploited: []KnownExploited{
 					{
 						CVE:                        "CVE-1234-5678",
@@ -306,15 +340,15 @@ func TestNewAffectedPackageRows(t *testing.T) {
 				OS:        &OperatingSystem{Name: "Linux", Version: "5.10"},
 				Package:   &Package{Name: "pkg1", Ecosystem: "ecosystem1"},
 				Namespace: "provider1:distro:Linux:5.10",
-				Detail: v6.AffectedPackageBlob{
+				Detail: v6.PackageBlob{
 					CVEs: []string{"CVE-1234-5678"},
-					Qualifiers: &v6.AffectedPackageQualifiers{
+					Qualifiers: &v6.PackageQualifiers{
 						RpmModularity: ptr("modularity"),
 						PlatformCPEs:  []string{"platform-cpe-1"},
 					},
-					Ranges: []v6.AffectedRange{
+					Ranges: []v6.Range{
 						{
-							Version: v6.AffectedVersion{
+							Version: v6.Version{
 								Type:       "semver",
 								Constraint: ">=1.0.0, <2.0.0",
 							},
@@ -330,6 +364,7 @@ func TestNewAffectedPackageRows(t *testing.T) {
 		{
 			Vulnerability: VulnerabilityInfo{
 				VulnerabilityBlob: v6.VulnerabilityBlob{Description: "CPE vulnerability description"},
+				Severity:          "unknown",
 				Provider:          "provider2",
 				KnownExploited: []KnownExploited{
 					{
@@ -357,11 +392,11 @@ func TestNewAffectedPackageRows(t *testing.T) {
 			AffectedPackageInfo: AffectedPackageInfo{
 				CPE:       &CPE{Part: "a", Vendor: "vendor1", Product: "product1"},
 				Namespace: "provider2:cpe",
-				Detail: v6.AffectedPackageBlob{
+				Detail: v6.PackageBlob{
 					CVEs: []string{"CVE-9876-5432"},
-					Ranges: []v6.AffectedRange{
+					Ranges: []v6.Range{
 						{
-							Version: v6.AffectedVersion{
+							Version: v6.Version{
 								Type:       "rpm",
 								Constraint: ">=2.0.0, <3.0.0",
 							},
@@ -400,11 +435,11 @@ func TestAffectedPackages(t *testing.T) {
 				ModifiedDate:  ptr(time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC)),
 				BlobValue:     &v6.VulnerabilityBlob{Description: "Test vulnerability"},
 			},
-			BlobValue: &v6.AffectedPackageBlob{
+			BlobValue: &v6.PackageBlob{
 				CVEs: []string{"CVE-1234-5678"},
-				Ranges: []v6.AffectedRange{
+				Ranges: []v6.Range{
 					{
-						Version: v6.AffectedVersion{
+						Version: v6.Version{
 							Type:       "semver",
 							Constraint: ">=1.0.0, <2.0.0",
 						},
@@ -426,11 +461,11 @@ func TestAffectedPackages(t *testing.T) {
 				Provider:  &v6.Provider{ID: "provider2"},
 				BlobValue: &v6.VulnerabilityBlob{Description: "CPE vulnerability description"},
 			},
-			BlobValue: &v6.AffectedPackageBlob{
+			BlobValue: &v6.PackageBlob{
 				CVEs: []string{"CVE-9876-5432"},
-				Ranges: []v6.AffectedRange{
+				Ranges: []v6.Range{
 					{
-						Version: v6.AffectedVersion{
+						Version: v6.Version{
 							Type:       "rpm",
 							Constraint: ">=2.0.0, <3.0.0",
 						},
@@ -511,6 +546,7 @@ func TestAffectedPackages(t *testing.T) {
 		{
 			Vulnerability: VulnerabilityInfo{
 				VulnerabilityBlob: v6.VulnerabilityBlob{Description: "Test vulnerability"},
+				Severity:          "unknown",
 				Provider:          "provider1",
 				Status:            "active",
 				PublishedDate:     ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
@@ -542,11 +578,11 @@ func TestAffectedPackages(t *testing.T) {
 				OS:        &OperatingSystem{Name: "Linux", Version: "5.10"},
 				Package:   &Package{Name: "pkg1", Ecosystem: "ecosystem1"},
 				Namespace: "provider1:distro:Linux:5.10",
-				Detail: v6.AffectedPackageBlob{
+				Detail: v6.PackageBlob{
 					CVEs: []string{"CVE-1234-5678"},
-					Ranges: []v6.AffectedRange{
+					Ranges: []v6.Range{
 						{
-							Version: v6.AffectedVersion{
+							Version: v6.Version{
 								Type:       "semver",
 								Constraint: ">=1.0.0, <2.0.0",
 							},
@@ -562,6 +598,7 @@ func TestAffectedPackages(t *testing.T) {
 		{
 			Vulnerability: VulnerabilityInfo{
 				VulnerabilityBlob: v6.VulnerabilityBlob{Description: "CPE vulnerability description"},
+				Severity:          "unknown",
 				Provider:          "provider2",
 				KnownExploited: []KnownExploited{
 					{
@@ -589,11 +626,11 @@ func TestAffectedPackages(t *testing.T) {
 			AffectedPackageInfo: AffectedPackageInfo{
 				CPE:       &CPE{Part: "a", Vendor: "vendor1", Product: "product1"},
 				Namespace: "provider2:cpe",
-				Detail: v6.AffectedPackageBlob{
+				Detail: v6.PackageBlob{
 					CVEs: []string{"CVE-9876-5432"},
-					Ranges: []v6.AffectedRange{
+					Ranges: []v6.Range{
 						{
-							Version: v6.AffectedVersion{
+							Version: v6.Version{
 								Type:       "rpm",
 								Constraint: ">=2.0.0, <3.0.0",
 							},
@@ -619,12 +656,12 @@ func TestFindAffectedPackages(t *testing.T) {
 	// Additional verifications are made to check that the combinations of different specs are handled correctly.
 	type pkgCall struct {
 		pkg     *v6.PackageSpecifier
-		options *v6.GetAffectedPackageOptions
+		options *v6.GetPackageOptions
 	}
 
 	type cpeCall struct {
 		cpe     *cpe.Attributes
-		options *v6.GetAffectedCPEOptions
+		options *v6.GetCPEOptions
 	}
 
 	testCases := []struct {
@@ -658,7 +695,7 @@ func TestFindAffectedPackages(t *testing.T) {
 			expectedPkgCalls: []pkgCall{
 				{
 					pkg: nil,
-					options: &v6.GetAffectedPackageOptions{
+					options: &v6.GetPackageOptions{
 						PreloadOS:            true,
 						PreloadPackage:       true,
 						PreloadVulnerability: true,
@@ -673,7 +710,7 @@ func TestFindAffectedPackages(t *testing.T) {
 			expectedCPECalls: []cpeCall{
 				{
 					cpe: nil,
-					options: &v6.GetAffectedCPEOptions{
+					options: &v6.GetCPEOptions{
 						PreloadCPE:           true,
 						PreloadVulnerability: true,
 						PreloadBlob:          true,
@@ -698,7 +735,7 @@ func TestFindAffectedPackages(t *testing.T) {
 			expectedPkgCalls: []pkgCall{
 				{
 					pkg: &v6.PackageSpecifier{CPE: &cpe.Attributes{Part: "a", Vendor: "vendor1", Product: "product1"}},
-					options: &v6.GetAffectedPackageOptions{
+					options: &v6.GetPackageOptions{
 						PreloadOS:            true,
 						PreloadPackage:       true,
 						PreloadVulnerability: true,
@@ -711,7 +748,7 @@ func TestFindAffectedPackages(t *testing.T) {
 			expectedCPECalls: []cpeCall{
 				{
 					cpe: &cpe.Attributes{Part: "a", Vendor: "vendor2", Product: "product2"},
-					options: &v6.GetAffectedCPEOptions{
+					options: &v6.GetCPEOptions{
 						PreloadCPE:           true,
 						PreloadVulnerability: true,
 						PreloadBlob:          true,
@@ -738,7 +775,7 @@ func TestFindAffectedPackages(t *testing.T) {
 			expectedPkgCalls: []pkgCall{
 				{
 					pkg: &v6.PackageSpecifier{CPE: &cpe.Attributes{Part: "a", Vendor: "vendor1", Product: "product1"}},
-					options: &v6.GetAffectedPackageOptions{
+					options: &v6.GetPackageOptions{
 						PreloadOS:            true,
 						PreloadPackage:       true,
 						PreloadVulnerability: true,
@@ -764,7 +801,7 @@ func TestFindAffectedPackages(t *testing.T) {
 			expectedPkgCalls: []pkgCall{
 				{
 					pkg: &v6.PackageSpecifier{Name: "test-package", Ecosystem: "npm"},
-					options: &v6.GetAffectedPackageOptions{
+					options: &v6.GetPackageOptions{
 						PreloadOS:            true,
 						PreloadPackage:       true,
 						PreloadVulnerability: true,
@@ -790,7 +827,7 @@ func TestFindAffectedPackages(t *testing.T) {
 			expectedPkgCalls: []pkgCall{
 				{
 					pkg: &v6.PackageSpecifier{Name: "test-package", Ecosystem: "npm"},
-					options: &v6.GetAffectedPackageOptions{
+					options: &v6.GetPackageOptions{
 						PreloadOS:            true,
 						PreloadPackage:       true,
 						PreloadVulnerability: true,
@@ -812,13 +849,13 @@ func TestFindAffectedPackages(t *testing.T) {
 			defer m.AssertExpectations(t)
 
 			for _, expected := range tc.expectedPkgCalls {
-				m.On("GetAffectedPackages", expected.pkg, mock.MatchedBy(func(actual *v6.GetAffectedPackageOptions) bool {
+				m.On("GetAffectedPackages", expected.pkg, mock.MatchedBy(func(actual *v6.GetPackageOptions) bool {
 					return cmp.Equal(actual, expected.options)
 				})).Return([]v6.AffectedPackageHandle{}, nil).Once()
 			}
 
 			for _, expected := range tc.expectedCPECalls {
-				m.On("GetAffectedCPEs", expected.cpe, mock.MatchedBy(func(actual *v6.GetAffectedCPEOptions) bool {
+				m.On("GetAffectedCPEs", expected.cpe, mock.MatchedBy(func(actual *v6.GetCPEOptions) bool {
 					return cmp.Equal(actual, expected.options)
 				})).Return([]v6.AffectedCPEHandle{}, nil).Once()
 			}
@@ -838,12 +875,12 @@ type affectedMockReader struct {
 	mock.Mock
 }
 
-func (m *affectedMockReader) GetAffectedPackages(pkgSpec *v6.PackageSpecifier, options *v6.GetAffectedPackageOptions) ([]v6.AffectedPackageHandle, error) {
+func (m *affectedMockReader) GetAffectedPackages(pkgSpec *v6.PackageSpecifier, options *v6.GetPackageOptions) ([]v6.AffectedPackageHandle, error) {
 	args := m.Called(pkgSpec, options)
 	return args.Get(0).([]v6.AffectedPackageHandle), args.Error(1)
 }
 
-func (m *affectedMockReader) GetAffectedCPEs(cpeSpec *cpe.Attributes, options *v6.GetAffectedCPEOptions) ([]v6.AffectedCPEHandle, error) {
+func (m *affectedMockReader) GetAffectedCPEs(cpeSpec *cpe.Attributes, options *v6.GetCPEOptions) ([]v6.AffectedCPEHandle, error) {
 	args := m.Called(cpeSpec, options)
 	return args.Get(0).([]v6.AffectedCPEHandle), args.Error(1)
 }
@@ -858,6 +895,257 @@ func (m *affectedMockReader) GetEpss(cve string) ([]v6.EpssHandle, error) {
 	return args.Get(0).([]v6.EpssHandle), args.Error(1)
 }
 
+func (m *affectedMockReader) GetCWEs(cve string) ([]v6.CWEHandle, error) {
+	args := m.Called(cve)
+	return args.Get(0).([]v6.CWEHandle), args.Error(1)
+}
+
 func ptr[T any](t T) *T {
 	return &t
+}
+
+func TestGetFixStateFromPackageBlob(t *testing.T) {
+	tests := []struct {
+		name     string
+		blob     *v6.PackageBlob
+		expected string
+	}{
+		{
+			name:     "nil blob returns unknown",
+			blob:     nil,
+			expected: "unknown",
+		},
+		{
+			name:     "empty blob returns unknown",
+			blob:     &v6.PackageBlob{},
+			expected: "unknown",
+		},
+		{
+			name: "blob with fixed status",
+			blob: &v6.PackageBlob{
+				Ranges: []v6.Range{
+					{
+						Fix: &v6.Fix{
+							State:   v6.FixedStatus,
+							Version: "1.2.3",
+						},
+					},
+				},
+			},
+			expected: "fixed",
+		},
+		{
+			name: "blob with not-fixed status",
+			blob: &v6.PackageBlob{
+				Ranges: []v6.Range{
+					{
+						Fix: &v6.Fix{
+							State: v6.NotFixedStatus,
+						},
+					},
+				},
+			},
+			expected: "not-fixed",
+		},
+		{
+			name: "blob with wont-fix status",
+			blob: &v6.PackageBlob{
+				Ranges: []v6.Range{
+					{
+						Fix: &v6.Fix{
+							State: v6.WontFixStatus,
+						},
+					},
+				},
+			},
+			expected: "wont-fix",
+		},
+		{
+			name: "blob with no fix returns unknown",
+			blob: &v6.PackageBlob{
+				Ranges: []v6.Range{
+					{
+						Fix: nil,
+					},
+				},
+			},
+			expected: "unknown",
+		},
+		{
+			name: "blob with mixed statuses prefers fixed",
+			blob: &v6.PackageBlob{
+				Ranges: []v6.Range{
+					{
+						Fix: &v6.Fix{
+							State: v6.NotFixedStatus,
+						},
+					},
+					{
+						Fix: &v6.Fix{
+							State:   v6.FixedStatus,
+							Version: "2.0.0",
+						},
+					},
+				},
+			},
+			expected: "fixed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getFixStateFromPackageBlob(tt.blob)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFilterByFixedStateForPackages(t *testing.T) {
+	tests := []struct {
+		name        string
+		packages    []affectedPackageWithDecorations
+		fixedStates []string
+		expectedLen int
+	}{
+		{
+			name: "empty fixed states returns all packages",
+			packages: []affectedPackageWithDecorations{
+				{AffectedPackageHandle: v6.AffectedPackageHandle{BlobValue: &v6.PackageBlob{}}},
+				{AffectedPackageHandle: v6.AffectedPackageHandle{BlobValue: &v6.PackageBlob{}}},
+			},
+			fixedStates: []string{},
+			expectedLen: 2,
+		},
+		{
+			name: "filter by fixed state",
+			packages: []affectedPackageWithDecorations{
+				makeAffectedPackageWithFixState(v6.FixedStatus),
+				makeAffectedPackageWithFixState(v6.NotFixedStatus),
+			},
+			fixedStates: []string{"fixed"},
+			expectedLen: 1,
+		},
+		{
+			name: "filter by multiple states",
+			packages: []affectedPackageWithDecorations{
+				makeAffectedPackageWithFixState(v6.FixedStatus),
+				makeAffectedPackageWithFixState(v6.NotFixedStatus),
+				makeAffectedPackageWithFixState(v6.WontFixStatus),
+			},
+			fixedStates: []string{"fixed", "wont-fix"},
+			expectedLen: 2,
+		},
+		{
+			name: "filter with no matches",
+			packages: []affectedPackageWithDecorations{
+				makeAffectedPackageWithFixState(v6.NotFixedStatus),
+			},
+			fixedStates: []string{"fixed"},
+			expectedLen: 0,
+		},
+		{
+			name: "packages with nil blob are filtered out",
+			packages: []affectedPackageWithDecorations{
+				makeAffectedPackageWithFixState(v6.FixedStatus),
+				{AffectedPackageHandle: v6.AffectedPackageHandle{BlobValue: nil}},
+			},
+			fixedStates: []string{"fixed"},
+			expectedLen: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := filterByFixedStateForPackages(tt.packages, tt.fixedStates)
+			assert.Equal(t, tt.expectedLen, len(result))
+		})
+	}
+}
+
+func TestFilterByFixedStateForCPEs(t *testing.T) {
+	tests := []struct {
+		name        string
+		cpes        []affectedCPEWithDecorations
+		fixedStates []string
+		expectedLen int
+	}{
+		{
+			name: "empty fixed states returns all CPEs",
+			cpes: []affectedCPEWithDecorations{
+				{AffectedCPEHandle: v6.AffectedCPEHandle{BlobValue: &v6.PackageBlob{}}},
+				{AffectedCPEHandle: v6.AffectedCPEHandle{BlobValue: &v6.PackageBlob{}}},
+			},
+			fixedStates: []string{},
+			expectedLen: 2,
+		},
+		{
+			name: "filter by fixed state",
+			cpes: []affectedCPEWithDecorations{
+				makeAffectedCPEWithFixState(v6.FixedStatus),
+				makeAffectedCPEWithFixState(v6.NotFixedStatus),
+			},
+			fixedStates: []string{"fixed"},
+			expectedLen: 1,
+		},
+		{
+			name: "filter by multiple states",
+			cpes: []affectedCPEWithDecorations{
+				makeAffectedCPEWithFixState(v6.FixedStatus),
+				makeAffectedCPEWithFixState(v6.NotFixedStatus),
+				makeAffectedCPEWithFixState(v6.WontFixStatus),
+			},
+			fixedStates: []string{"not-fixed", "wont-fix"},
+			expectedLen: 2,
+		},
+		{
+			name: "CPEs with nil blob are filtered out",
+			cpes: []affectedCPEWithDecorations{
+				makeAffectedCPEWithFixState(v6.FixedStatus),
+				{AffectedCPEHandle: v6.AffectedCPEHandle{BlobValue: nil}},
+			},
+			fixedStates: []string{"fixed"},
+			expectedLen: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := filterByFixedStateForCPEs(tt.cpes, tt.fixedStates)
+			assert.Equal(t, tt.expectedLen, len(result))
+		})
+	}
+}
+
+func makeAffectedPackageWithFixState(state v6.FixStatus) affectedPackageWithDecorations {
+	return affectedPackageWithDecorations{
+		AffectedPackageHandle: v6.AffectedPackageHandle{
+			BlobValue: &v6.PackageBlob{
+				Ranges: []v6.Range{
+					{
+						Fix: &v6.Fix{
+							State:   state,
+							Version: "1.0.0",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func makeAffectedCPEWithFixState(state v6.FixStatus) affectedCPEWithDecorations {
+	return affectedCPEWithDecorations{
+		AffectedCPEHandle: v6.AffectedCPEHandle{
+			BlobValue: &v6.PackageBlob{
+				Ranges: []v6.Range{
+					{
+						Fix: &v6.Fix{
+							State:   state,
+							Version: "1.0.0",
+						},
+					},
+				},
+			},
+		},
+	}
 }

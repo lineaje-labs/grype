@@ -855,6 +855,77 @@ func TestNew(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "uv lock metadata",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.PythonUvLockEntry{
+					Index: "https://pypi.org/simple",
+					Dependencies: []syftPkg.PythonUvLockDependencyEntry{
+						{Name: "certifi"},
+						{Name: "charset-normalizer"},
+						{Name: "idna"},
+						{Name: "urllib3"},
+					},
+				},
+			},
+		},
+		{
+			name: "conda meta package metadata",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.CondaMetaPackage{
+					Name:        "numpy",
+					Version:     "1.21.0",
+					Build:       "py39h20b1b1c_0",
+					BuildNumber: 0,
+					Channel:     "conda-forge",
+				},
+			},
+		},
+		{
+			name: "golang source entry metadata",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.GolangSourceEntry{
+					H1Digest:        "h1:some-hash-value",
+					OperatingSystem: "linux",
+					Architecture:    "amd64",
+					BuildTags:       "release",
+					CgoEnabled:      true,
+				},
+			},
+			metadata: GolangSourceMetadata{
+				H1Digest:        "h1:some-hash-value",
+				OperatingSystem: "linux",
+				Architecture:    "amd64",
+				BuildTags:       "release",
+				CgoEnabled:      true,
+			},
+		},
+		{
+			name: "snap-entry",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.SnapEntry{
+					SnapType:     "app",
+					Base:         "core22",
+					SnapName:     "test-snap",
+					SnapVersion:  "1.0.0",
+					Architecture: "amd64",
+				},
+			},
+		},
+		{
+			name: "python-pdm-lock-entry",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.PythonPdmLockEntry{
+					Summary: "Test package",
+					Files: []syftPkg.PythonFileRecord{
+						{
+							Path: "test/file.py",
+						},
+					},
+					Dependencies: []string{"dependency1", "dependency2"},
+				},
+			},
+		},
 	}
 
 	// capture each observed metadata type, we should see all of them relate to what syft provides by the end of testing
@@ -1060,7 +1131,7 @@ func Test_RemovePackagesByOverlap(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			d := distro.FromRelease(test.sbom.Artifacts.LinuxDistribution)
+			d := distro.FromRelease(test.sbom.Artifacts.LinuxDistribution, distro.DefaultFixChannels())
 			catalog := removePackagesByOverlap(test.sbom.Artifacts.Packages, test.sbom.Relationships, d)
 			pkgs := FromCollection(catalog, SynthesisConfig{})
 			var pkgNames []string

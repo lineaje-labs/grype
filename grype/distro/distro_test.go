@@ -14,10 +14,15 @@ import (
 	"github.com/anchore/syft/syft/source/directorysource"
 )
 
+func testFixChannels() []FixChannel {
+	return DefaultFixChannels()
+}
+
 func Test_NewDistroFromRelease(t *testing.T) {
 	tests := []struct {
 		name      string
 		release   linux.Release
+		channels  []FixChannel
 		expected  *Distro
 		minor     string
 		major     string
@@ -31,6 +36,7 @@ func Test_NewDistroFromRelease(t *testing.T) {
 				Version:   "7",
 				IDLike:    []string{"rhel"},
 			},
+			channels: testFixChannels(),
 			expected: &Distro{
 				Type:    CentOS,
 				Version: "8",
@@ -45,6 +51,7 @@ func Test_NewDistroFromRelease(t *testing.T) {
 				Name:      "windows",
 				VersionID: "8",
 			},
+			channels: testFixChannels(),
 			expected: &Distro{
 				Type:    Windows,
 				Version: "8",
@@ -58,6 +65,7 @@ func Test_NewDistroFromRelease(t *testing.T) {
 				ID:      "centos",
 				Version: "8",
 			},
+			channels: testFixChannels(),
 			expected: &Distro{
 				Type:    CentOS,
 				Version: "8",
@@ -71,6 +79,7 @@ func Test_NewDistroFromRelease(t *testing.T) {
 			release: linux.Release{
 				ID: "centos",
 			},
+			channels: testFixChannels(),
 			expected: &Distro{
 				Type: CentOS,
 			},
@@ -81,6 +90,7 @@ func Test_NewDistroFromRelease(t *testing.T) {
 				ID:        "bogosity",
 				VersionID: "8",
 			},
+			channels:  testFixChannels(),
 			expectErr: require.Error,
 		},
 		{
@@ -94,6 +104,7 @@ func Test_NewDistroFromRelease(t *testing.T) {
 				VersionCodename: "trixie",
 				Name:            "Debian GNU/Linux",
 			},
+			channels: testFixChannels(),
 			expected: &Distro{
 				Type:     Debian,
 				Codename: "trixie",
@@ -108,12 +119,156 @@ func Test_NewDistroFromRelease(t *testing.T) {
 				Version:   "3.0.20240417",
 				VersionID: "3.0",
 			},
+			channels: testFixChannels(),
 			expected: &Distro{
 				Type:    Azure,
 				Version: "3.0",
 			},
 			major: "3",
 			minor: "0",
+		},
+		{
+			name: "eus hint ignored when configured to never apply",
+			release: linux.Release{
+				ID:              "rhel",
+				Version:         "9.4",
+				ExtendedSupport: true,
+			},
+			channels: testFixChannels(),
+			expected: &Distro{
+				Type:     RedHat,
+				Version:  "9.4",
+				Channels: names("eus"),
+			},
+			major: "9",
+			minor: "4",
+		},
+		{
+			name: "eus hinted at as attribute",
+			release: linux.Release{
+				ID:              "rhel",
+				Version:         "9.4",
+				ExtendedSupport: true,
+			},
+			channels: []FixChannel{
+				{
+					Name:  "eus",
+					IDs:   []string{"rhel"},
+					Apply: ChannelConditionallyEnabled,
+				},
+			},
+			expected: &Distro{
+				Type:     RedHat,
+				Version:  "9.4",
+				Channels: names("eus"),
+			},
+			major: "9",
+			minor: "4",
+		},
+		{
+			name: "eus embedded in the version",
+			release: linux.Release{
+				ID:      "rhel",
+				Version: "9.4+eus",
+			},
+			channels: []FixChannel{
+				{
+					Name:  "eus",
+					IDs:   []string{"rhel"},
+					Apply: ChannelConditionallyEnabled,
+				},
+			},
+			expected: &Distro{
+				Type:     RedHat,
+				Version:  "9.4",
+				Channels: names("eus"),
+			},
+			major: "9",
+			minor: "4",
+		},
+		{
+			name: "eus hinted at as attribute (always apply)",
+			release: linux.Release{
+				ID:              "rhel",
+				Version:         "9.4",
+				ExtendedSupport: true,
+			},
+			channels: []FixChannel{
+				{
+					Name:  "eus",
+					IDs:   []string{"rhel"},
+					Apply: ChannelAlwaysEnabled, // important!
+				},
+			},
+			expected: &Distro{
+				Type:     RedHat,
+				Version:  "9.4",
+				Channels: names("eus"),
+			},
+			major: "9",
+			minor: "4",
+		},
+		{
+			name: "eus embedded in the version (always apply)",
+			release: linux.Release{
+				ID:      "rhel",
+				Version: "9.4+eus",
+			},
+			channels: []FixChannel{
+				{
+					Name:  "eus",
+					IDs:   []string{"rhel"},
+					Apply: ChannelAlwaysEnabled, // important!
+				},
+			},
+			expected: &Distro{
+				Type:     RedHat,
+				Version:  "9.4",
+				Channels: names("eus"),
+			},
+			major: "9",
+			minor: "4",
+		},
+		{
+			name: "eus hinted at as attribute (never apply)",
+			release: linux.Release{
+				ID:              "rhel",
+				Version:         "9.4",
+				ExtendedSupport: true,
+			},
+			channels: []FixChannel{
+				{
+					Name:  "eus",
+					IDs:   []string{"rhel"},
+					Apply: ChannelNeverEnabled, // important!
+				},
+			},
+			expected: &Distro{
+				Type:    RedHat,
+				Version: "9.4",
+			},
+			major: "9",
+			minor: "4",
+		},
+		{
+			name: "eus embedded in the version (never apply)",
+			release: linux.Release{
+				ID:      "rhel",
+				Version: "9.4+eus",
+			},
+			channels: []FixChannel{
+				{
+					Name:  "eus",
+					IDs:   []string{"rhel"},
+					Apply: ChannelNeverEnabled, // important!
+				},
+			},
+			expected: &Distro{
+				Type:    RedHat,
+				Version: "9.4",
+			},
+			major: "9",
+			minor: "4",
 		},
 	}
 
@@ -123,7 +278,7 @@ func Test_NewDistroFromRelease(t *testing.T) {
 				tt.expectErr = require.NoError
 			}
 
-			distro, err := NewFromRelease(tt.release)
+			distro, err := NewFromRelease(tt.release, tt.channels)
 			tt.expectErr(t, err)
 			if err != nil {
 				return
@@ -278,6 +433,11 @@ func Test_NewDistroFromRelease_Coverage(t *testing.T) {
 			Version: "8.4",
 		},
 		{
+			Name:    "test-fixtures/os/echo",
+			Type:    Echo,
+			Version: "1",
+		},
+		{
 			Name: "test-fixtures/os/gentoo",
 			Type: Gentoo,
 		},
@@ -290,6 +450,16 @@ func Test_NewDistroFromRelease_Coverage(t *testing.T) {
 			Name:    "test-fixtures/os/chainguard",
 			Type:    Chainguard,
 			Version: "20230214",
+		},
+		{
+			Name:    "test-fixtures/os/minimos",
+			Type:    MinimOS,
+			Version: "20241031",
+		},
+		{
+			Name:    "test-fixtures/os/raspbian",
+			Type:    Raspbian,
+			Version: "9",
 		},
 	}
 
@@ -306,7 +476,7 @@ func Test_NewDistroFromRelease_Coverage(t *testing.T) {
 			require.NotNil(t, release, "empty linux release info")
 
 			// craft a new distro from the syft raw info
-			d, err := NewFromRelease(*release)
+			d, err := NewFromRelease(*release, testFixChannels())
 			require.NoError(t, err)
 
 			observedDistros.Add(d.Type.String())
@@ -358,7 +528,7 @@ func TestDistro_FullVersion(t *testing.T) {
 			d, err := NewFromRelease(linux.Release{
 				ID:      "centos",
 				Version: test.version,
-			})
+			}, testFixChannels())
 			require.NoError(t, err)
 			assert.Equal(t, test.expected, d.Version)
 		})
@@ -395,11 +565,141 @@ func TestDistro_MajorVersion(t *testing.T) {
 			d, err := NewFromRelease(linux.Release{
 				ID:      "centos",
 				Version: test.version,
-			})
+			}, testFixChannels())
 			require.NoError(t, err)
 			assert.Equal(t, test.expected, d.MajorVersion())
 
 		})
 	}
 
+}
+
+func names(ns ...string) []string {
+	return ns
+}
+
+func TestParseDistroString(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           string
+		expectedName    string
+		expectedVersion string
+	}{
+		{
+			name:            "hyphen separator",
+			input:           "debian-11",
+			expectedName:    "debian",
+			expectedVersion: "11",
+		},
+		{
+			name:            "colon separator",
+			input:           "debian:11",
+			expectedName:    "debian",
+			expectedVersion: "11",
+		},
+		{
+			name:            "at separator",
+			input:           "debian@11",
+			expectedName:    "debian",
+			expectedVersion: "11",
+		},
+		{
+			name:            "no separator",
+			input:           "debian",
+			expectedName:    "debian",
+			expectedVersion: "",
+		},
+		{
+			name:            "with major.minor version",
+			input:           "ubuntu-20.04",
+			expectedName:    "ubuntu",
+			expectedVersion: "20.04",
+		},
+		{
+			name:            "with codename",
+			input:           "ubuntu@focal",
+			expectedName:    "ubuntu",
+			expectedVersion: "focal",
+		},
+		{
+			name:            "with channels",
+			input:           "rhel:9.4+eus",
+			expectedName:    "rhel",
+			expectedVersion: "9.4+eus",
+		},
+		{
+			name:            "opensuse-leap with hyphen separator",
+			input:           "opensuse-leap-15.2",
+			expectedName:    "opensuse-leap",
+			expectedVersion: "15.2",
+		},
+		{
+			name:            "opensuse-leap with colon separator",
+			input:           "opensuse-leap:15.2",
+			expectedName:    "opensuse-leap",
+			expectedVersion: "15.2",
+		},
+		{
+			name:            "opensuse-leap with at separator",
+			input:           "opensuse-leap@15.2",
+			expectedName:    "opensuse-leap",
+			expectedVersion: "15.2",
+		},
+		{
+			name:            "opensuse-leap without version",
+			input:           "opensuse-leap",
+			expectedName:    "opensuse-leap",
+			expectedVersion: "",
+		},
+		{
+			name:            "opensuse-leap with mixed case",
+			input:           "OpenSUSE-Leap-15.2",
+			expectedName:    "opensuse-leap",
+			expectedVersion: "15.2",
+		},
+		{
+			name:            "empty string",
+			input:           "",
+			expectedName:    "",
+			expectedVersion: "",
+		},
+		{
+			name:            "with whitespace",
+			input:           "  debian : 11  ",
+			expectedName:    "debian",
+			expectedVersion: "11",
+		},
+		{
+			name:            "multiple separators uses first",
+			input:           "debian-11:test",
+			expectedName:    "debian",
+			expectedVersion: "11:test",
+		},
+		{
+			name:            "rhel with hyphen",
+			input:           "rhel-8",
+			expectedName:    "rhel",
+			expectedVersion: "8",
+		},
+		{
+			name:            "centos with colon",
+			input:           "centos:7",
+			expectedName:    "centos",
+			expectedVersion: "7",
+		},
+		{
+			name:            "alpine with at",
+			input:           "alpine@3.11",
+			expectedName:    "alpine",
+			expectedVersion: "3.11",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, version := ParseDistroString(tt.input)
+			assert.Equal(t, tt.expectedName, name, "unexpected name")
+			assert.Equal(t, tt.expectedVersion, version, "unexpected version")
+		})
+	}
 }

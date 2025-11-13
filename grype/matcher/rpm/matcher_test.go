@@ -14,10 +14,6 @@ import (
 	syftPkg "github.com/anchore/syft/syft/pkg"
 )
 
-func intRef(x int) *int {
-	return &x
-}
-
 func TestMatcherRpm(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -42,11 +38,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
-
+				d := distro.New(distro.CentOS, "8", "")
 				store := newMockProvider("neutron-libs", "neutron", false, false)
 
 				return store, d, matcher
@@ -73,10 +65,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("neutron", "neutron-devel", false, false)
 
@@ -103,10 +92,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("neutron-libs", "neutron", false, false)
 
@@ -137,10 +123,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("perl-Errno", "perl", true, false)
 
@@ -162,10 +145,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("perl-Errno", "doesn't-matter", false, false)
 
@@ -186,10 +166,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("perl-Errno", "doesn't-matter", true, false)
 
@@ -210,10 +187,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("perl-Errno", "doesn't-matter", false, false)
 
@@ -234,10 +208,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("perl-Errno", "doesn't-matter", true, false)
 
@@ -258,10 +229,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("maniac", "doesn't-matter", false, true)
 
@@ -285,10 +253,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("maniac", "doesn't-matter", false, true)
 
@@ -308,10 +273,7 @@ func TestMatcherRpm(t *testing.T) {
 			},
 			setup: func() (vulnerability.Provider, *distro.Distro, Matcher) {
 				matcher := Matcher{}
-				d, err := distro.New(distro.CentOS, "8", "")
-				if err != nil {
-					t.Fatal("could not create distro: ", err)
-				}
+				d := distro.New(distro.CentOS, "8", "")
 
 				store := newMockProvider("maniac", "doesn't-matter", false, true)
 
@@ -398,10 +360,20 @@ func Test_addEpochIfApplicable(t *testing.T) {
 			pkg: pkg.Package{
 				Version: "3.26.0-6.el8",
 				Metadata: pkg.RpmMetadata{
-					Epoch: nil,
+					Epoch: nil, // assume 0 epoch
 				},
 			},
 			expected: "0:3.26.0-6.el8",
+		},
+		{
+			name: "version is empty",
+			pkg: pkg.Package{
+				Version: "",
+				Metadata: pkg.RpmMetadata{
+					Epoch: nil, // assume 0 epoch
+				},
+			},
+			expected: "",
 		},
 	}
 	for _, test := range tests {
@@ -411,8 +383,4 @@ func Test_addEpochIfApplicable(t *testing.T) {
 			assert.Equal(t, test.expected, p.Version)
 		})
 	}
-}
-
-func strRef(s string) *string {
-	return &s
 }

@@ -26,7 +26,7 @@ func newCPETestStore() vulnerability.Provider {
 				Namespace: "nvd:cpe",
 			},
 			PackageName: "activerecord",
-			Constraint:  version.MustGetConstraint("< 3.7.6", version.SemanticFormat),
+			Constraint:  version.MustGetConstraint("< 3.7.6", version.GemFormat),
 			CPEs:        []cpe.CPE{cpe.Must("cpe:2.3:*:activerecord:activerecord:*:*:*:*:*:rails:*:*", "")},
 		},
 		{
@@ -35,7 +35,7 @@ func newCPETestStore() vulnerability.Provider {
 				Namespace: "nvd:cpe",
 			},
 			PackageName: "activerecord",
-			Constraint:  version.MustGetConstraint("< 3.7.4", version.SemanticFormat),
+			Constraint:  version.MustGetConstraint("< 3.7.4", version.GemFormat),
 			CPEs:        []cpe.CPE{cpe.Must("cpe:2.3:*:activerecord:activerecord:*:*:*:*:*:ruby:*:*", "")},
 		},
 		{
@@ -148,14 +148,14 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								Namespace: "nvd:cpe",
 								CPEs:      []string{"cpe:2.3:*:activerecord:activerecord:3.7.5:rando4:*:re:*:rails:*:*"},
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "activerecord",
 									Version: "3.7.5",
 								},
 							},
 							Found: match.CPEResult{
 								CPEs:              []string{"cpe:2.3:*:activerecord:activerecord:*:*:*:*:*:rails:*:*"},
-								VersionConstraint: "< 3.7.6 (semver)",
+								VersionConstraint: "< 3.7.6 (gem)",
 								VulnerabilityID:   "CVE-2017-fake-1",
 							},
 							Matcher: matcher,
@@ -199,14 +199,14 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								Namespace: "nvd:cpe",
 								CPEs:      []string{"cpe:2.3:*:activerecord:activerecord:3.7.5:rando4:*:re:*:rails:*:*"},
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "activerecord",
 									Version: "3.7.5",
 								},
 							},
 							Found: match.CPEResult{
 								CPEs:              []string{"cpe:2.3:*:activerecord:activerecord:*:*:*:*:*:rails:*:*"},
-								VersionConstraint: "< 3.7.6 (semver)",
+								VersionConstraint: "< 3.7.6 (gem)",
 								VulnerabilityID:   "CVE-2017-fake-1",
 							},
 							Matcher: matcher,
@@ -253,14 +253,14 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 									"cpe:2.3:*:activerecord:activerecord:*:rando4:*:re:*:rails:*:*", //important!
 								},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "activerecord",
 									Version: "", // important!
 								},
 							},
 							Found: match.CPEResult{
 								CPEs:              []string{"cpe:2.3:*:activerecord:activerecord:*:*:*:*:*:rails:*:*"},
-								VersionConstraint: "< 3.7.6 (semver)",
+								VersionConstraint: "< 3.7.6 (gem)",
 								VulnerabilityID:   "CVE-2017-fake-1",
 							},
 							Matcher: matcher,
@@ -290,14 +290,14 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:*:activerecord:activerecord:*:rando1:*:ra:*:ruby:*:*"}, //important!
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "activerecord",
 									Version: "", // important!
 								},
 							},
 							Found: match.CPEResult{
 								CPEs:              []string{"cpe:2.3:*:activerecord:activerecord:*:*:*:*:*:ruby:*:*"},
-								VersionConstraint: "< 3.7.4 (semver)",
+								VersionConstraint: "< 3.7.4 (gem)",
 								VulnerabilityID:   "CVE-2017-fake-2",
 							},
 							Matcher: matcher,
@@ -329,14 +329,14 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 									"cpe:2.3:*:activerecord:activerecord:*:rando4:*:re:*:rails:*:*", //important!
 								},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "activerecord",
 									Version: "", // important!
 								},
 							},
 							Found: match.CPEResult{
 								CPEs:              []string{"cpe:2.3:*:activerecord:activerecord:4.0.1:*:*:*:*:*:*:*"},
-								VersionConstraint: "= 4.0.1 (semver)",
+								VersionConstraint: "= 4.0.1 (gem)",
 								VulnerabilityID:   "CVE-2017-fake-3",
 							},
 							Matcher: matcher,
@@ -397,14 +397,14 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 									"cpe:2.3:*:activerecord:activerecord:3.7.3:rando4:*:re:*:rails:*:*",
 								},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "activerecord",
 									Version: "3.7.3",
 								},
 							},
 							Found: match.CPEResult{
 								CPEs:              []string{"cpe:2.3:*:activerecord:activerecord:*:*:*:*:*:rails:*:*"},
-								VersionConstraint: "< 3.7.6 (semver)",
+								VersionConstraint: "< 3.7.6 (gem)",
 								VulnerabilityID:   "CVE-2017-fake-1",
 							},
 							Matcher: matcher,
@@ -434,14 +434,14 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:*:activerecord:activerecord:3.7.3:rando1:*:ra:*:ruby:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "activerecord",
 									Version: "3.7.3",
 								},
 							},
 							Found: match.CPEResult{
 								CPEs:              []string{"cpe:2.3:*:activerecord:activerecord:*:*:*:*:*:ruby:*:*"},
-								VersionConstraint: "< 3.7.4 (semver)",
+								VersionConstraint: "< 3.7.4 (gem)",
 								VulnerabilityID:   "CVE-2017-fake-2",
 							},
 							Matcher: matcher,
@@ -483,14 +483,14 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:*:*:activerecord:4.0.1:*:*:*:*:*:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "activerecord",
 									Version: "4.0.1",
 								},
 							},
 							Found: match.CPEResult{
 								CPEs:              []string{"cpe:2.3:*:activerecord:activerecord:4.0.1:*:*:*:*:*:*:*"},
-								VersionConstraint: "= 4.0.1 (semver)",
+								VersionConstraint: "= 4.0.1 (gem)",
 								VulnerabilityID:   "CVE-2017-fake-3",
 							},
 							Matcher: matcher,
@@ -543,7 +543,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:*:awesome:awesome:98SE1:rando1:*:ra:*:dunno:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "awesome",
 									Version: "98SE1",
 								},
@@ -593,7 +593,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:*:multiple:multiple:1.0:*:*:*:*:*:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "multiple",
 									Version: "1.0",
 								},
@@ -657,7 +657,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:*:sw:sw:0.1:*:*:*:*:*:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "sw",
 									Version: "0.1",
 								},
@@ -713,7 +713,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:*:funfun:funfun:5.2.1:*:*:*:*:python:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "funfun",
 									Version: "5.2.1",
 								},
@@ -764,7 +764,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:a:handlebarsjs:handlebars:0.1:*:*:*:*:*:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "handlebars",
 									Version: "0.1",
 								},
@@ -814,7 +814,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:a:handlebarsjs:handlebars:0.1:*:*:*:*:*:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "handlebars",
 									Version: "0.1",
 								},
@@ -864,7 +864,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:a:handlebarsjs:handlebars:0.1:*:*:*:*:*:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "handlebars",
 									Version: "0.1",
 								},
@@ -914,7 +914,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:a:handlebarsjs:handlebars:0.1:*:*:*:*:*:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "handlebars",
 									Version: "0.1",
 								},
@@ -977,7 +977,7 @@ func TestFindMatchesByPackageCPE(t *testing.T) {
 							SearchedBy: match.CPEParameters{
 								CPEs:      []string{"cpe:2.3:a:handlebarsjs:handlebars:0.1:*:*:*:*:*:*:*"},
 								Namespace: "nvd:cpe",
-								Package: match.CPEPackageParameter{
+								Package: match.PackageParameter{
 									Name:    "handlebars",
 									Version: "0.1",
 								},
@@ -1063,10 +1063,8 @@ func TestFilterCPEsByVersion(t *testing.T) {
 			}
 
 			var versionObj *version.Version
-			var err error
 			if test.version != "" {
-				versionObj, err = version.NewVersion(test.version, version.UnknownFormat)
-				require.NoError(t, err)
+				versionObj = version.New(test.version, version.UnknownFormat)
 			}
 
 			// run the test subject...
@@ -1075,7 +1073,8 @@ func TestFilterCPEsByVersion(t *testing.T) {
 			// format CPE objects to string...
 			actualStrs := make([]string, len(actual))
 			for idx, a := range actual {
-				actualStrs[idx] = a.Attributes.BindToFmtString()
+				// use .String() for proper escaping
+				actualStrs[idx] = a.Attributes.String()
 			}
 
 			assert.ElementsMatch(t, test.expected, actualStrs)

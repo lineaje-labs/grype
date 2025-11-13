@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/anchore/clio"
-	"github.com/anchore/grype/grype/distro"
 	"github.com/anchore/grype/grype/match"
 	"github.com/anchore/grype/grype/pkg"
 	"github.com/anchore/grype/grype/vulnerability"
@@ -75,13 +74,8 @@ func TestPackagesAreSorted(t *testing.T) {
 		Source: &syftSource.Description{
 			Metadata: syftSource.DirectoryMetadata{},
 		},
-		Distro: &distro.Distro{
-			Type:    "centos",
-			IDLike:  []string{"rhel"},
-			Version: "8.0",
-		},
 	}
-	doc, err := NewDocument(clio.Identification{}, packages, ctx, matches, nil, NewMetadataMock(), nil, nil, SortByPackage)
+	doc, err := NewDocument(clio.Identification{}, packages, ctx, matches, nil, NewMetadataMock(), nil, nil, SortByPackage, true)
 	if err != nil {
 		t.Fatalf("unable to get document: %+v", err)
 	}
@@ -136,13 +130,8 @@ func TestFixSuggestedVersion(t *testing.T) {
 		Source: &syftSource.Description{
 			Metadata: syftSource.DirectoryMetadata{},
 		},
-		Distro: &distro.Distro{
-			Type:    "centos",
-			IDLike:  []string{"rhel"},
-			Version: "8.0",
-		},
 	}
-	doc, err := NewDocument(clio.Identification{}, packages, ctx, matches, nil, NewMetadataMock(), nil, nil, SortByPackage)
+	doc, err := NewDocument(clio.Identification{}, packages, ctx, matches, nil, NewMetadataMock(), nil, nil, SortByPackage, true)
 	if err != nil {
 		t.Fatalf("unable to get document: %+v", err)
 	}
@@ -158,10 +147,9 @@ func TestTimestampValidFormat(t *testing.T) {
 
 	ctx := pkg.Context{
 		Source: nil,
-		Distro: nil,
 	}
 
-	doc, err := NewDocument(clio.Identification{}, nil, ctx, matches, nil, nil, nil, nil, SortByPackage)
+	doc, err := NewDocument(clio.Identification{}, nil, ctx, matches, nil, nil, nil, nil, SortByPackage, true)
 	if err != nil {
 		t.Fatalf("unable to get document: %+v", err)
 	}
@@ -172,5 +160,22 @@ func TestTimestampValidFormat(t *testing.T) {
 	if timeErr != nil {
 		t.Fatalf("unable to parse time: %+v", timeErr)
 	}
+
+}
+
+func TestConfigurableTimestamp(t *testing.T) {
+
+	matches := match.NewMatches()
+	ctx := pkg.Context{
+		Source: nil,
+		Distro: nil,
+	}
+
+	doc, err := NewDocument(clio.Identification{}, nil, ctx, matches, nil, nil, nil, nil, SortByPackage, false)
+	if err != nil {
+		t.Fatalf("unable to get document: %+v", err)
+	}
+
+	assert.Empty(t, doc.Descriptor.Timestamp)
 
 }

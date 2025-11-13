@@ -24,47 +24,20 @@ func TestMatchBySBOMDocument(t *testing.T) {
 		expectedDetails []match.Detail
 	}{
 		{
-			name:        "single KB package",
-			fixture:     "test-fixtures/sbom/syft-sbom-with-kb-packages.json",
-			expectedIDs: []string{"CVE-2016-3333"},
-			expectedDetails: []match.Detail{
-				{
-					Type: match.ExactDirectMatch,
-					SearchedBy: map[string]interface{}{
-						"distro": map[string]string{
-							"type":    "windows",
-							"version": "10816",
-						},
-						"namespace": "msrc:distro:windows:10816",
-						"package": map[string]string{
-							"name":    "10816",
-							"version": "3200970",
-						},
-					},
-					Found: map[string]interface{}{
-						"versionConstraint": "3200970 || 878787 || base (kb)",
-						"vulnerabilityID":   "CVE-2016-3333",
-					},
-					Matcher:    match.MsrcMatcher,
-					Confidence: 1,
-				},
-			},
-		},
-		{
 			name:        "unknown package type",
 			fixture:     "test-fixtures/sbom/syft-sbom-with-unknown-packages.json",
 			expectedIDs: []string{"CVE-bogus-my-package-2-idris"},
 			expectedDetails: []match.Detail{
 				{
 					Type: match.ExactDirectMatch,
-					SearchedBy: map[string]interface{}{
-						"language":  "idris",
-						"namespace": "github:language:idris",
-						"package":   map[string]string{"name": "my-package", "version": "1.0.5"},
+					SearchedBy: match.EcosystemParameters{
+						Language:  "idris",
+						Namespace: "github:language:idris",
+						Package:   match.PackageParameter{Name: "my-package", Version: "1.0.5"},
 					},
-					Found: map[string]interface{}{
-						"versionConstraint": "< 2.0 (unknown)",
-						"vulnerabilityID":   "CVE-bogus-my-package-2-idris",
+					Found: match.EcosystemResult{
+						VersionConstraint: "< 2.0 (unknown)",
+						VulnerabilityID:   "CVE-bogus-my-package-2-idris",
 					},
 					Matcher:    match.StockMatcher,
 					Confidence: 1,

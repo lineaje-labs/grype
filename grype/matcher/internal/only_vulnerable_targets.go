@@ -15,9 +15,9 @@ import (
 	syftPkg "github.com/anchore/syft/syft/pkg"
 )
 
-// onlyVulnerableTargets returns a criteria object that tests vulnerability qualifiers against the package vulnerability rules.
+// OnlyVulnerableTargets returns a criteria object that tests vulnerability qualifiers against the package vulnerability rules.
 // TODO: in the future this should be moved to underneath the store to avoid the need to recompute CPE comparisons and to leverage ecosystem aliases for target software
-func onlyVulnerableTargets(p pkg.Package) vulnerability.Criteria {
+func OnlyVulnerableTargets(p pkg.Package) vulnerability.Criteria {
 	return search.ByFunc(func(v vulnerability.Vulnerability) (bool, string, error) {
 		matches, reasons := isVulnerableTarget(p, v)
 		return matches, reasons, nil
@@ -104,7 +104,7 @@ func isUnknownTarget(targetSW string) bool {
 	}
 
 	// There are some common target software CPE components which are not currently
-	// supported by syft but are signifcant sources of false positives and should be
+	// supported by syft but are significant sources of false positives and should be
 	// considered known for the purposes of filtering here
 	known := map[string]bool{
 		"joomla":    true,
@@ -154,21 +154,27 @@ func matchesAttribute(a1, a2 string) bool {
 }
 
 func hasIntersectingTargetSoftware(set1, set2 *strset.Set) bool {
-	set1Pkg := pkgTypesFromTargetSoftware(set1.List())
-	set2Pkg := pkgTypesFromTargetSoftware(set2.List())
+	set1Pkg := normalizeTargetSoftwares(set1.List())
+	set2Pkg := normalizeTargetSoftwares(set2.List())
 	intersection := strset.Intersection(set1Pkg, set2Pkg)
 	return !intersection.IsEmpty()
 }
 
-func pkgTypesFromTargetSoftware(ts []string) *strset.Set {
-	pkgTypes := strset.New()
+func normalizeTargetSoftwares(ts []string) *strset.Set {
+	normalizedTargetSWs := strset.New()
 	for _, ts := range ts {
-		pt := internal.CPETargetSoftwareToPackageType(ts)
+		// Attempt to normalize target sw to package type, e.g. node and nodejs should match
+		pt := string(internal.CPETargetSoftwareToPackageType(ts))
+		if pt == "" && ts != "*" && ts != "?" && ts != "-" {
+			// normalizing failed; preserve raw cpe target sw string as the type
+			// unless it is wildcard
+			pt = strings.ToLower(ts)
+		}
 		if pt != "" {
-			pkgTypes.Add(string(pt))
+			normalizedTargetSWs.Add(pt)
 		}
 	}
-	return pkgTypes
+	return normalizedTargetSWs
 }
 
 func packageElements(p pkg.Package, ts []string) string {

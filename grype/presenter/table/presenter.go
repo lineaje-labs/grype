@@ -7,6 +7,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/renderer"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/scylladb/go-set/strset"
 
 	"github.com/anchore/grype/grype/db/v5/namespace/distro"
@@ -56,14 +58,39 @@ type epss struct {
 }
 
 func (e epss) String() string {
-	percentile := e.Percentile * 100
-	switch {
-	case percentile == 0:
-		return "  N/A"
-	case percentile < 0.1:
-		return "< 0.1%"
+	if e.Percentile == 0 {
+		return "N/A"
 	}
-	return fmt.Sprintf("%5.2f", percentile)
+
+	probability := e.Score * 100
+	percentile := e.Percentile * 100
+
+	if probability < 0.1 {
+		return fmt.Sprintf("< 0.1%% (%s)", formatPercentileWithSuffix(percentile))
+	}
+
+	return fmt.Sprintf("%.1f%% (%s)", probability, formatPercentileWithSuffix(percentile))
+}
+
+func formatPercentileWithSuffix(percentile float64) string {
+	p := int(percentile)
+
+	// Handle special cases for 11th, 12th, 13th
+	if p%100 >= 11 && p%100 <= 13 {
+		return fmt.Sprintf("%dth", p)
+	}
+
+	// Handle other cases
+	switch p % 10 {
+	case 1:
+		return fmt.Sprintf("%dst", p)
+	case 2:
+		return fmt.Sprintf("%dnd", p)
+	case 3:
+		return fmt.Sprintf("%drd", p)
+	default:
+		return fmt.Sprintf("%dth", p)
+	}
 }
 
 // NewPresenter is a *Presenter constructor
@@ -99,26 +126,47 @@ func (p *Presenter) Present(output io.Writer) error {
 		return err
 	}
 
-	table := tablewriter.NewWriter(output)
-	table.SetHeader([]string{"Name", "Installed", "Fixed-In", "Type", "Vulnerability", "Severity", "EPSS%", "Risk"})
-	table.SetAutoWrapText(false)
-	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
-	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table := newTable(output, []string{"Name", "Installed", "Fixed In", "Type", "Vulnerability", "Severity", "EPSS", "Risk"})
 
-	table.SetHeaderLine(false)
-	table.SetBorder(false)
-	table.SetAutoFormatHeaders(true)
-	table.SetCenterSeparator("")
-	table.SetColumnSeparator("")
-	table.SetRowSeparator("")
-	table.SetTablePadding("  ")
-	table.SetNoWhiteSpace(true)
+	if err := table.Bulk(rs.Render()); err != nil {
+		return fmt.Errorf("failed to add table rows: %w", err)
+	}
 
-	table.AppendBulk(rs.Render())
+	return table.Render()
+}
 
-	table.Render()
-
-	return nil
+func newTable(output io.Writer, columns []string) *tablewriter.Table {
+	return tablewriter.NewTable(output,
+		tablewriter.WithHeader(columns),
+		tablewriter.WithHeaderAutoWrap(tw.WrapNone),
+		tablewriter.WithRowAutoWrap(tw.WrapNone),
+		tablewriter.WithAutoHide(tw.On),
+		tablewriter.WithRenderer(renderer.NewBlueprint()),
+		tablewriter.WithBehavior(
+			tw.Behavior{
+				TrimSpace: tw.On,
+				AutoHide:  tw.On,
+			},
+		),
+		tablewriter.WithPadding(
+			tw.Padding{
+				Right: "  ",
+			},
+		),
+		tablewriter.WithRendition(
+			tw.Rendition{
+				Symbols: tw.NewSymbols(tw.StyleNone),
+				Settings: tw.Settings{
+					Lines: tw.Lines{
+						ShowTop:        tw.Off,
+						ShowBottom:     tw.Off,
+						ShowHeaderLine: tw.Off,
+						ShowFooterLine: tw.Off,
+					},
+				},
+			},
+		),
+	)
 }
 
 func (p *Presenter) getRows(doc models.Document, showSuppressed bool) rows {
@@ -179,7 +227,7 @@ func (p *Presenter) newRow(m models.Match, extraAnnotation string, showDistro bo
 	var kev, annotation string
 	if len(m.Vulnerability.KnownExploited) > 0 {
 		if p.withColor {
-			kev = p.kevStyle.Reverse(false).Render("") + p.kevStyle.Render("KEV") + p.kevStyle.Reverse(false).Render("") // ⚡❋◆◉፨⿻⨳✖•
+			kev = p.kevStyle.Render(" KEV ") // ⚡❋◆◉፨⿻⨳✖• (requires non-standard fonts:  )
 		} else {
 			annotations = append([]string{"kev"}, annotations...)
 		}

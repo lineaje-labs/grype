@@ -7,6 +7,7 @@ import (
 	"time"
 
 	v6 "github.com/anchore/grype/grype/db/v6"
+	"github.com/anchore/grype/grype/vulnerability"
 	"github.com/anchore/grype/internal/cvss"
 	"github.com/anchore/grype/internal/log"
 )
@@ -31,6 +32,9 @@ type VulnerabilityInfo struct {
 
 	v6.VulnerabilityBlob `json:",inline"`
 
+	// Severity is the single string representation of the vulnerability's severity based on the set of available severity values
+	Severity string `json:"severity,omitempty"`
+
 	// Provider is the upstream data processor (usually Vunnel) that is responsible for vulnerability records. Each provider
 	// should be scoped to a specific vulnerability dataset, for instance, the "ubuntu" provider for all records from
 	// Canonicals' Ubuntu Security Notices (for all Ubuntu distro versions).
@@ -53,6 +57,9 @@ type VulnerabilityInfo struct {
 
 	// EPSS is a list of Exploit Prediction Scoring System (EPSS) scores for the vulnerability
 	EPSS []EPSS `json:"epss,omitempty"`
+
+	// CWEs is a list of Common Weakness Enumeration (CWE) identifiers for the vulnerability
+	CWEs []CWE `json:"cwes,omitempty"`
 }
 
 // OperatingSystem represents specific release of an operating system.
@@ -82,6 +89,13 @@ type EPSS struct {
 	EPSS       float64 `json:"epss"`
 	Percentile float64 `json:"percentile"`
 	Date       string  `json:"date"`
+}
+
+type CWE struct {
+	Cve    string `json:"cve"`
+	CWE    string `json:"cwe"`
+	Source string `json:"source"`
+	Type   string `json:"type"`
 }
 
 type CVSSSeverity struct {
@@ -133,6 +147,7 @@ func newVulnerabilityInfo(vuln v6.VulnerabilityHandle, vc vulnerabilityDecoratio
 	return VulnerabilityInfo{
 		Model:             vuln,
 		VulnerabilityBlob: blob,
+		Severity:          getSeverity(blob.Severities),
 		Provider:          vuln.Provider.ID,
 		Status:            string(vuln.Status),
 		PublishedDate:     vuln.PublishedDate,
@@ -180,7 +195,8 @@ func FindVulnerabilities(reader interface { //nolint:funlen
 	v6.VulnerabilityStoreReader
 	v6.AffectedPackageStoreReader
 	v6.VulnerabilityDecoratorStoreReader
-}, config VulnerabilitiesOptions) ([]Vulnerability, error) {
+}, config VulnerabilitiesOptions,
+) ([]Vulnerability, error) {
 	log.WithFields("vulnSpecs", len(config.Vulnerability)).Debug("fetching vulnerabilities")
 
 	if config.RecordLimit == 0 {
@@ -210,7 +226,7 @@ func FindVulnerabilities(reader interface { //nolint:funlen
 	// find all affected packages for this vulnerability, so we can gather os information
 	var pairs []vulnerabilityAffectedPackageJoin
 	for _, vuln := range vulns {
-		affected, fetchErr := reader.GetAffectedPackages(nil, &v6.GetAffectedPackageOptions{
+		affected, fetchErr := reader.GetAffectedPackages(nil, &v6.GetPackageOptions{
 			PreloadOS: true,
 			Vulnerabilities: []v6.VulnerabilitySpecifier{
 				{
@@ -267,4 +283,19 @@ func FindVulnerabilities(reader interface { //nolint:funlen
 	}
 
 	return newVulnerabilityRows(pairs...), err
+}
+
+func getSeverity(sevs []v6.Severity) string {
+	if len(sevs) == 0 {
+		return vulnerability.UnknownSeverity.String()
+	}
+	// get the first severity value (which is ranked highest)
+	switch v := sevs[0].Value.(type) {
+	case string:
+		return v
+	case CVSSSeverity:
+		return cvss.SeverityFromBaseScore(v.Metrics.BaseScore).String()
+	}
+
+	return fmt.Sprintf("%v", sevs[0].Value)
 }

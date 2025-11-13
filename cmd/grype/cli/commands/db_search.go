@@ -104,7 +104,7 @@ func DBSearch(app clio.Application) *cobra.Command {
 
   Search for affected packages by CPE (note: version/update is not considered):
 
-    $ grype db search --pkg 'cpe:2.3:a:jetty:jetty_http_server:*:*:*:*:*:*'
+    $ grype db search --pkg 'cpe:2.3:a:jetty:jetty_http_server:*:*:*:*:*:*:*:*'
     $ grype db search --pkg 'cpe:/a:jetty:jetty_http_server'`,
 		PreRunE: disableUI(app),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
@@ -165,6 +165,7 @@ func runDBSearchMatches(opts dbSearchMatchOptions) error {
 		OS:                    opts.OS.Specs,
 		AllowBroadCPEMatching: opts.Package.AllowBroadCPEMatching,
 		RecordLimit:           opts.Bounds.RecordLimit,
+		FixedStates:           opts.Vulnerability.FixedState,
 	})
 	if queryErr != nil {
 		if !errors.Is(queryErr, v6.ErrLimitReached) {
@@ -194,11 +195,12 @@ func presentDBSearchMatches(outputFormat string, structuredRows dbsearch.Matches
 		}
 		rows := renderDBSearchPackagesTableRows(structuredRows.Flatten())
 
-		table := newTable(output)
+		table := newTable(output, []string{"Vulnerability", "Package", "Ecosystem", "Namespace", "Version Constraint"})
 
-		table.SetHeader([]string{"Vulnerability", "Package", "Ecosystem", "Namespace", "Version Constraint"})
-		table.AppendBulk(rows)
-		table.Render()
+		if err := table.Bulk(rows); err != nil {
+			return fmt.Errorf("failed to add table rows: %+v", err)
+		}
+		return table.Render()
 	case jsonOutputFormat:
 		if structuredRows == nil {
 			// always allocate the top level collection
@@ -250,5 +252,11 @@ func renderDBSearchPackagesTableRows(structuredRows []dbsearch.AffectedPackage) 
 }
 
 func mimicV5Namespace(row dbsearch.AffectedPackage) string {
-	return v6.MimicV5Namespace(&row.Vulnerability.Model, row.Model)
+	namespace := v6.MimicV5Namespace(&row.Vulnerability.Model, row.Model)
+
+	if row.Model != nil && row.Model.OperatingSystem != nil && row.Model.OperatingSystem.Channel != "" {
+		return namespace + ":" + row.Model.OperatingSystem.Channel
+	}
+
+	return namespace
 }

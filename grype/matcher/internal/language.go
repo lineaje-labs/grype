@@ -1,10 +1,10 @@
 package internal
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/anchore/grype/grype/match"
+	"github.com/anchore/grype/grype/matcher/internal/result"
 	"github.com/anchore/grype/grype/pkg"
 	"github.com/anchore/grype/grype/search"
 	"github.com/anchore/grype/grype/version"
@@ -12,9 +12,9 @@ import (
 	"github.com/anchore/grype/internal/log"
 )
 
-func MatchPackageByLanguage(store vulnerability.Provider, p pkg.Package, matcherType match.MatcherType) ([]match.Match, []match.IgnoredMatch, error) {
+func MatchPackageByLanguage(store vulnerability.Provider, p pkg.Package, matcherType match.MatcherType) ([]match.Match, []match.IgnoreFilter, error) {
 	var matches []match.Match
-	var ignored []match.IgnoredMatch
+	var ignored []match.IgnoreFilter
 
 	for _, name := range store.PackageSearchNames(p) {
 		nameMatches, nameIgnores, err := MatchPackageByEcosystemPackageName(store, p, name, matcherType)
@@ -28,57 +28,38 @@ func MatchPackageByLanguage(store vulnerability.Provider, p pkg.Package, matcher
 	return matches, ignored, nil
 }
 
-func MatchPackageByEcosystemPackageName(provider vulnerability.Provider, p pkg.Package, packageName string, matcherType match.MatcherType) ([]match.Match, []match.IgnoredMatch, error) {
+func MatchPackageByEcosystemPackageName(vp vulnerability.Provider, p pkg.Package, packageName string, matcherType match.MatcherType) ([]match.Match, []match.IgnoreFilter, error) {
 	if isUnknownVersion(p.Version) {
 		log.WithFields("package", p.Name).Trace("skipping package with unknown version")
 		return nil, nil, nil
 	}
 
-	verObj, err := version.NewVersionFromPkg(p)
-	if err != nil {
-		if errors.Is(err, version.ErrUnsupportedVersion) {
-			log.WithFields("error", err).Tracef("skipping package '%s@%s'", p.Name, p.Version)
-			return nil, nil, nil
-		}
-		return nil, nil, fmt.Errorf("matcher failed to parse version pkg=%q ver=%q: %w", p.Name, p.Version, err)
-	}
+	provider := result.NewProvider(vp, p, matcherType)
 
-	var matches []match.Match
-	vulns, err := provider.FindVulnerabilities(
+	criteria := []vulnerability.Criteria{
 		search.ByEcosystem(p.Language, p.Type),
 		search.ByPackageName(packageName),
-		onlyQualifiedPackages(p),
-		onlyVulnerableVersions(verObj),
-		onlyNonWithdrawnVulnerabilities(),
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("matcher failed to fetch language=%q pkg=%q: %w", p.Language, p.Name, err)
+		OnlyQualifiedPackages(p),
+		OnlyVulnerableVersions(version.New(p.Version, pkg.VersionFormat(p))),
+		OnlyNonWithdrawnVulnerabilities(),
 	}
 
-	for _, vuln := range vulns {
-		matches = append(matches, match.Match{
-			Vulnerability: vuln,
-			Package:       p,
-			Details: []match.Detail{
-				{
-					Type:       match.ExactDirectMatch,
-					Confidence: 1.0, // TODO: this is hard coded for now
-					Matcher:    matcherType,
-					SearchedBy: map[string]interface{}{
-						"language":  string(p.Language),
-						"namespace": vuln.Namespace,
-						"package": map[string]string{
-							"name":    p.Name,
-							"version": p.Version,
-						},
-					},
-					Found: map[string]interface{}{
-						"vulnerabilityID":   vuln.ID,
-						"versionConstraint": vuln.Constraint.String(),
-					},
-				},
-			},
-		})
+	// TODO: previous impl set confidence to 1, this results in
+	// a confidence of zero. What should it be?
+	disclosures, err := provider.FindResults(criteria...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("matcher failed to fetch disclosure language=%q pkg=%q: %w", p.Language, p.Name, err)
 	}
-	return matches, nil, err
+
+	// we want to perform the same results, but look for explicit naks, which indicates that a vulnerability should not apply
+	criteria = append(criteria, search.ForUnaffected())
+	resolutions, err := provider.FindResults(criteria...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("matcher failed to fetch resolution language=%q pkg=%q: %w", p.Language, p.Name, err)
+	}
+
+	// remove any disclosures that have been explicitly nacked
+	remaining := disclosures.Remove(resolutions)
+
+	return remaining.ToMatches(), nil, err
 }

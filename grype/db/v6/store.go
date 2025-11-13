@@ -13,8 +13,11 @@ type store struct {
 	*dbMetadataStore
 	*providerStore
 	*vulnerabilityStore
+	*operatingSystemStore
 	*affectedPackageStore
+	*unaffectedPackageStore
 	*affectedCPEStore
+	*unaffectedCPEStore
 	*vulnerabilityDecoratorStore
 	blobStore *blobStore
 	db        *gorm.DB
@@ -80,13 +83,19 @@ func newStore(cfg Config, empty, writable bool) (*store, error) {
 	dbVersion := newSchemaVerFromDBMetadata(*meta)
 
 	bs := newBlobStore(db)
+
+	osStore := newOperatingSystemStore(db, bs)
+
 	return &store{
 		dbMetadataStore:             metadataStore,
 		providerStore:               newProviderStore(db),
 		vulnerabilityStore:          newVulnerabilityStore(db, bs),
-		affectedPackageStore:        newAffectedPackageStore(db, bs),
+		operatingSystemStore:        osStore,
+		affectedPackageStore:        newAffectedPackageStore(db, bs, osStore),
+		unaffectedPackageStore:      newUnaffectedPackageStore(db, bs, osStore),
 		affectedCPEStore:            newAffectedCPEStore(db, bs),
 		vulnerabilityDecoratorStore: newVulnerabilityDecoratorStore(db, bs, dbVersion),
+		unaffectedCPEStore:          newUnaffectedCPEStore(db, bs),
 		blobStore:                   bs,
 		db:                          db,
 		config:                      cfg,

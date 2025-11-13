@@ -27,7 +27,9 @@ import (
 	"github.com/anchore/grype/grype/matcher/stock"
 	"github.com/anchore/grype/grype/pkg"
 	"github.com/anchore/grype/grype/presenter/models"
+	"github.com/anchore/grype/grype/version"
 	"github.com/anchore/grype/grype/vex"
+	vexStatus "github.com/anchore/grype/grype/vex/status"
 	"github.com/anchore/grype/grype/vulnerability"
 	"github.com/anchore/grype/internal"
 	"github.com/anchore/grype/internal/bus"
@@ -98,8 +100,8 @@ var ignoreFixedMatches = []match.IgnoreRule{
 }
 
 var ignoreVEXFixedNotAffected = []match.IgnoreRule{
-	{VexStatus: string(vex.StatusNotAffected)},
-	{VexStatus: string(vex.StatusFixed)},
+	{VexStatus: string(vexStatus.NotAffected)},
+	{VexStatus: string(vexStatus.Fixed)},
 }
 
 var ignoreLinuxKernelHeaders = []match.IgnoreRule{
@@ -153,14 +155,32 @@ func runGrype(app clio.Application, opts *options.Grype, userInput string) (errs
 		},
 		func() (err error) {
 			startTime := time.Now()
-			defer func() { log.WithFields("time", time.Since(startTime)).Info("loaded DB") }()
+
+			defer func() {
+				validStr := "valid"
+				if err != nil {
+					validStr = "invalid"
+				}
+				log.WithFields("time", time.Since(startTime), "status", validStr).Info("loaded DB")
+				if status != nil {
+					log.WithFields("schema", status.SchemaVersion).Debug("├──")
+					log.WithFields("built", status.Built.UTC().Format(time.RFC3339)).Debug("├──")
+					log.WithFields("from", status.From).Debug("├──")
+					log.WithFields("path", status.Path).Debug("└──")
+				}
+			}()
 			log.Debug("loading DB")
 			vp, status, err = grype.LoadVulnerabilityDB(opts.ToClientConfig(), opts.ToCuratorConfig(), opts.DB.AutoUpdate)
+
 			return validateDBLoad(err, status)
 		},
 		func() (err error) {
 			startTime := time.Now()
-			defer func() { log.WithFields("time", time.Since(startTime)).Info("gathered packages") }()
+
+			defer func() {
+				log.WithFields("time", time.Since(startTime), "packages", len(packages)).Info("gathered packages")
+			}()
+
 			log.Debugf("gathering packages")
 			// packages are grype.Package, not syft.Package
 			// the SBOM is returned for downstream formatting concerns
@@ -170,22 +190,31 @@ func runGrype(app clio.Application, opts *options.Grype, userInput string) (errs
 			if err != nil {
 				return fmt.Errorf("failed to catalog: %w", err)
 			}
+
 			return nil
 		},
 	)
-
 	if err != nil {
 		return err
 	}
 
 	defer log.CloseAndLogError(vp, status.Path)
 
+	warnWhenDistroHintNeeded(packages, &pkgContext)
+
 	if err = applyVexRules(opts); err != nil {
 		return fmt.Errorf("applying vex rules: %w", err)
 	}
 
 	startTime := time.Now()
-	applyDistroHint(packages, &pkgContext, opts)
+
+	vexProcessor, err := vex.NewProcessor(vex.ProcessorOptions{
+		Documents:   opts.VexDocuments,
+		IgnoreRules: opts.Ignore,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create VEX processor: %w", err)
+	}
 
 	vulnMatcher := grype.VulnerabilityMatcher{
 		VulnerabilityProvider: vp,
@@ -193,10 +222,7 @@ func runGrype(app clio.Application, opts *options.Grype, userInput string) (errs
 		NormalizeByCVE:        opts.ByCVE,
 		FailSeverity:          opts.FailOnSeverity(),
 		Matchers:              getMatchers(opts),
-		VexProcessor: vex.NewProcessor(vex.ProcessorOptions{
-			Documents:   opts.VexDocuments,
-			IgnoreRules: opts.Ignore,
-		}),
+		VexProcessor:          vexProcessor,
 	}
 
 	remainingMatches, ignoredMatches, err := vulnMatcher.FindMatches(packages, pkgContext)
@@ -210,7 +236,7 @@ func runGrype(app clio.Application, opts *options.Grype, userInput string) (errs
 	log.WithFields("time", time.Since(startTime)).Info("found vulnerability matches")
 	startTime = time.Now()
 
-	model, err := models.NewDocument(app.ID(), packages, pkgContext, *remainingMatches, ignoredMatches, vp, opts, dbInfo(status, vp), models.SortStrategy(opts.SortBy.Criteria))
+	model, err := models.NewDocument(app.ID(), packages, pkgContext, *remainingMatches, ignoredMatches, vp, opts, dbInfo(status, vp), models.SortStrategy(opts.SortBy.Criteria), opts.Timestamp)
 	if err != nil {
 		return fmt.Errorf("failed to create document: %w", err)
 	}
@@ -227,6 +253,24 @@ func runGrype(app clio.Application, opts *options.Grype, userInput string) (errs
 	log.WithFields("time", time.Since(startTime)).Trace("wrote vulnerability report")
 
 	return errs
+}
+
+func warnWhenDistroHintNeeded(pkgs []pkg.Package, context *pkg.Context) {
+	hasOSPackageWithoutDistro := false
+	for _, p := range pkgs {
+		switch p.Type {
+		case syftPkg.AlpmPkg, syftPkg.DebPkg, syftPkg.RpmPkg, syftPkg.KbPkg:
+			if p.Distro == nil {
+				hasOSPackageWithoutDistro = true
+				break
+			}
+		}
+	}
+
+	if context.Distro == nil && hasOSPackageWithoutDistro {
+		log.Warnf("Unable to determine the OS distribution of some packages. This may result in missing vulnerabilities. " +
+			"You may specify a distro using: --distro <distro>:<version>")
+	}
 }
 
 func dbInfo(status *vulnerability.ProviderStatus, vp vulnerability.Provider) any {
@@ -249,39 +293,6 @@ func dbInfo(status *vulnerability.ProviderStatus, vp vulnerability.Provider) any
 	}{
 		Status:    status,
 		Providers: providers,
-	}
-}
-
-func applyDistroHint(pkgs []pkg.Package, context *pkg.Context, opts *options.Grype) {
-	if opts.Distro != "" {
-		log.Infof("using distro: %s", opts.Distro)
-
-		split := strings.Split(opts.Distro, ":")
-		d := split[0]
-		v := ""
-		if len(split) > 1 {
-			v = split[1]
-		}
-		var err error
-		context.Distro, err = distro.NewFromNameVersion(d, v)
-		if err != nil {
-			log.WithFields("distro", opts.Distro, "error", err).Warn("unable to parse distro")
-		}
-	}
-
-	hasOSPackageWithoutDistro := false
-	for _, p := range pkgs {
-		switch p.Type {
-		case syftPkg.AlpmPkg, syftPkg.DebPkg, syftPkg.RpmPkg, syftPkg.KbPkg:
-			if p.Distro == nil {
-				hasOSPackageWithoutDistro = true
-			}
-		}
-	}
-
-	if context.Distro == nil && hasOSPackageWithoutDistro {
-		log.Warnf("Unable to determine the OS distribution of some packages. This may result in missing vulnerabilities. " +
-			"You may specify a distro using: --distro <distro>:<version>")
 	}
 }
 
@@ -348,11 +359,51 @@ func getProviderConfig(opts *options.Grype) pkg.ProviderConfig {
 			Platform:               opts.Platform,
 			Name:                   opts.Name,
 			DefaultImagePullSource: opts.DefaultImagePullSource,
+			Sources:                opts.From,
 		},
 		SynthesisConfig: pkg.SynthesisConfig{
 			GenerateMissingCPEs: opts.GenerateMissingCPEs,
+			Distro: pkg.DistroConfig{
+				Override:    applyDistroHint(opts.Distro),
+				FixChannels: getFixChannels(opts.FixChannel),
+			},
 		},
 	}
+}
+
+func getFixChannels(fixChannelOpts options.FixChannels) distro.FixChannels {
+	// use the API defaults as a starting point, then overlay the application options
+	eusOptions := distro.DefaultFixChannels().Get("eus")
+
+	if eusOptions == nil {
+		panic("default fix channels do not contain Red Hat EUS channel")
+	}
+
+	eusOptions.Apply = distro.FixChannelEnabled(fixChannelOpts.RedHatEUS.Apply)
+	if fixChannelOpts.RedHatEUS.Versions != "" {
+		eusOptions.Versions = version.MustGetConstraint(fixChannelOpts.RedHatEUS.Versions, version.SemanticFormat)
+	}
+
+	return []distro.FixChannel{
+		{
+			// information inherent to the channel (part of the API defaults)
+			Name: "eus",
+			IDs:  eusOptions.IDs,
+
+			// user configurable options
+			Versions: eusOptions.Versions,
+			Apply:    eusOptions.Apply,
+		},
+	}
+}
+
+func applyDistroHint(hint string) *distro.Distro {
+	if hint == "" {
+		return nil
+	}
+
+	name, version := distro.ParseDistroString(hint)
+	return distro.NewFromNameVersion(name, version)
 }
 
 func validateDBLoad(loadErr error, status *vulnerability.ProviderStatus) error {
@@ -402,22 +453,24 @@ func validateRootArgs(cmd *cobra.Command, args []string) error {
 }
 
 func applyVexRules(opts *options.Grype) error {
-	if len(opts.Ignore) == 0 && len(opts.VexDocuments) > 0 {
+	// If any vex documents are provided, assume the user intends to ignore vulnerabilities that those
+	// vex documents list as "fixed" or "not_affected".
+	if len(opts.VexDocuments) > 0 {
 		opts.Ignore = append(opts.Ignore, ignoreVEXFixedNotAffected...)
 	}
 
-	for _, vexStatus := range opts.VexAdd {
-		switch vexStatus {
-		case string(vex.StatusAffected):
+	for _, status := range opts.VexAdd {
+		switch status {
+		case string(vexStatus.Affected):
 			opts.Ignore = append(
-				opts.Ignore, match.IgnoreRule{VexStatus: string(vex.StatusAffected)},
+				opts.Ignore, match.IgnoreRule{VexStatus: string(vexStatus.Affected)},
 			)
-		case string(vex.StatusUnderInvestigation):
+		case string(vexStatus.UnderInvestigation):
 			opts.Ignore = append(
-				opts.Ignore, match.IgnoreRule{VexStatus: string(vex.StatusUnderInvestigation)},
+				opts.Ignore, match.IgnoreRule{VexStatus: string(vexStatus.UnderInvestigation)},
 			)
 		default:
-			return fmt.Errorf("invalid VEX status in vex-add setting: %s", vexStatus)
+			return fmt.Errorf("invalid VEX status in vex-add setting: %s", status)
 		}
 	}
 

@@ -3,42 +3,46 @@ package version
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"unicode"
 
 	hashiVer "github.com/anchore/go-version"
 )
 
-// derived from https://semver.org/, but additionally matches partial versions (e.g. "2.0")
-var pseudoSemverPattern = regexp.MustCompile(`^(0|[1-9]\d*)(\.(0|[1-9]\d*))?(\.(0|[1-9]\d*))?(?:(-|alpha|beta|rc)((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
+// derived from https://semver.org/, but additionally matches:
+// - partial versions (e.g. "2.0")
+// - optional prefix "v" (e.g. "v1.0.0")
+var pseudoSemverPattern = regexp.MustCompile(`^v?(0|[1-9]\d*)(\.(0|[1-9]\d*))?(\.(0|[1-9]\d*))?(?:(-|alpha|beta|rc)((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
 
 type fuzzyConstraint struct {
-	rawPhrase          string
-	phraseHint         string
-	semanticConstraint *hashiVer.Constraints
-	constraints        constraintExpression
+	RawPhrase          string
+	PhraseHint         string
+	SemanticConstraint *hashiVer.Constraints
+	Constraints        simpleRangeExpression
 }
 
-func newFuzzyConstraint(phrase, hint string) (*fuzzyConstraint, error) {
+func newFuzzyConstraint(phrase, hint string) (fuzzyConstraint, error) {
 	if phrase == "" {
 		// an empty constraint is always satisfied
-		return &fuzzyConstraint{
-			rawPhrase:  phrase,
-			phraseHint: hint,
+		return fuzzyConstraint{
+			RawPhrase:  phrase,
+			PhraseHint: hint,
 		}, nil
 	}
 
-	constraints, err := newConstraintExpression(phrase, newFuzzyComparator)
+	constraints, err := parseRangeExpression(phrase)
 	if err != nil {
-		return nil, fmt.Errorf("could not create fuzzy constraint: %+v", err)
+		return fuzzyConstraint{}, fmt.Errorf("could not create fuzzy constraint: %+v", err)
 	}
 	var semverConstraint *hashiVer.Constraints
 
 	// check all version unit phrases to see if this is a valid semver constraint
 	valid := true
 check:
-	for _, units := range constraints.units {
+	for _, units := range constraints.Units {
 		for _, unit := range units {
-			if !pseudoSemverPattern.MatchString(unit.version) {
+			if !pseudoSemverPattern.MatchString(unit.Version) {
 				valid = false
 				break check
 			}
@@ -49,28 +53,20 @@ check:
 		semverConstraint = &value
 	}
 
-	return &fuzzyConstraint{
-		rawPhrase:          phrase,
-		phraseHint:         hint,
-		constraints:        constraints,
-		semanticConstraint: semverConstraint,
+	return fuzzyConstraint{
+		RawPhrase:          phrase,
+		PhraseHint:         hint,
+		Constraints:        constraints,
+		SemanticConstraint: semverConstraint,
 	}, nil
 }
 
-func newFuzzyComparator(unit constraintUnit) (Comparator, error) {
-	ver, err := newFuzzyVersion(unit.version)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse constraint version (%s): %w", unit.version, err)
-	}
-	return &ver, nil
-}
-
-func (f *fuzzyConstraint) Satisfied(verObj *Version) (bool, error) {
-	if f.rawPhrase == "" && verObj != nil {
+func (f fuzzyConstraint) Satisfied(verObj *Version) (bool, error) {
+	if f.RawPhrase == "" && verObj != nil {
 		// an empty constraint is always satisfied
 		return true, nil
 	} else if verObj == nil {
-		if f.rawPhrase != "" {
+		if f.RawPhrase != "" {
 			// a non-empty constraint with no version given should always fail
 			return false, nil
 		}
@@ -81,11 +77,11 @@ func (f *fuzzyConstraint) Satisfied(verObj *Version) (bool, error) {
 
 	// rebuild temp constraint based off of ver obj
 	if verObj.Format != UnknownFormat {
-		newConstaint, err := GetConstraint(f.rawPhrase, verObj.Format)
+		newConstraint, err := GetConstraint(f.RawPhrase, verObj.Format)
 		// check if constraint is not fuzzyConstraint
-		_, ok := newConstaint.(*fuzzyConstraint)
+		_, ok := newConstraint.(fuzzyConstraint)
 		if err == nil && !ok {
-			satisfied, err := newConstaint.Satisfied(verObj)
+			satisfied, err := newConstraint.Satisfied(verObj)
 			if err == nil {
 				return satisfied, nil
 			}
@@ -93,25 +89,35 @@ func (f *fuzzyConstraint) Satisfied(verObj *Version) (bool, error) {
 	}
 
 	// attempt semver first, then fallback to fuzzy part matching...
-	if f.semanticConstraint != nil {
+	if f.SemanticConstraint != nil {
 		if pseudoSemverPattern.MatchString(version) {
-			if semver, err := newSemanticVersion(version); err == nil && semver != nil {
-				return f.semanticConstraint.Check(semver.verObj), nil
+			// we're stricter about accepting looser semver rules here since we have no context about
+			// the true format of the version, thus we want to reduce the change of false negatives
+			if semver, err := newSemanticVersion(version, true); err == nil {
+				return f.SemanticConstraint.Check(semver.obj), nil
 			}
 		}
 	}
 	// semver didn't work, use fuzzy part matching instead...
-	return f.constraints.satisfied(verObj)
+	return f.Constraints.satisfied(UnknownFormat, verObj)
 }
 
-func (f *fuzzyConstraint) String() string {
-	if f.rawPhrase == "" {
+func (f fuzzyConstraint) Format() Format {
+	return UnknownFormat
+}
+
+func (f fuzzyConstraint) String() string {
+	if f.RawPhrase == "" {
 		return "none (unknown)"
 	}
-	if f.phraseHint != "" {
-		return fmt.Sprintf("%s (%s)", f.rawPhrase, f.phraseHint)
+	if f.PhraseHint != "" {
+		return fmt.Sprintf("%s (%s)", f.RawPhrase, f.PhraseHint)
 	}
-	return fmt.Sprintf("%s (unknown)", f.rawPhrase)
+	return fmt.Sprintf("%s (unknown)", f.RawPhrase)
+}
+
+func (f fuzzyConstraint) Value() string {
+	return f.RawPhrase
 }
 
 // Note: the below code is from https://github.com/facebookincubator/nvdtools/blob/688794c4d3a41929eeca89304e198578d4595d53/cvefeed/nvd/smartvercmp.go (apache V2)
@@ -140,7 +146,12 @@ func fuzzyVersionComparison(v1, v2 string) int {
 			ns1 = leftPad(ns1, -diff)
 		}
 
-		if cmp := strings.Compare(ns1, ns2); cmp != 0 {
+		// Check if both parts look like they have patch numbers (e.g., "p9" vs "p15")
+		if hasPatchNumber(ns1) && hasPatchNumber(ns2) {
+			if cmp := comparePatchNumbers(ns1, ns2); cmp != 0 {
+				return cmp
+			}
+		} else if cmp := strings.Compare(ns1, ns2); cmp != 0 {
 			return cmp
 		}
 
@@ -201,4 +212,55 @@ func leftPad(s string, n int) string {
 
 func stripLeadingV(ver string) string {
 	return strings.TrimPrefix(ver, "v")
+}
+
+// hasPatchNumber returns true if the version segment looks like it has a patch number
+// e.g., "p9", "p15", "rc1", "alpha2", "8p9", "8p15"
+func hasPatchNumber(segment string) bool {
+	for i, r := range segment {
+		if unicode.IsLetter(r) && i < len(segment)-1 {
+			next := rune(segment[i+1])
+			if unicode.IsDigit(next) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// comparePatchNumbers compares version segments with patch numbers numerically
+// e.g., "p9" < "p15", "rc1" < "rc10", "8p9" < "8p15"
+func comparePatchNumbers(left, right string) int {
+	findLetterDigitBoundary := func(s string) int {
+		for i, r := range s {
+			if unicode.IsLetter(r) && i < len(s)-1 && unicode.IsDigit(rune(s[i+1])) {
+				return i + 1
+			}
+		}
+		return -1
+	}
+
+	leftPos := findLetterDigitBoundary(left)
+	rightPos := findLetterDigitBoundary(right)
+
+	if leftPos > 0 && rightPos > 0 {
+		leftPrefix, leftNumStr := left[:leftPos], left[leftPos:]
+		rightPrefix, rightNumStr := right[:rightPos], right[rightPos:]
+
+		if cmp := strings.Compare(leftPrefix, rightPrefix); cmp != 0 {
+			return cmp
+		}
+
+		if leftNum, err1 := strconv.Atoi(leftNumStr); err1 == nil {
+			if rightNum, err2 := strconv.Atoi(rightNumStr); err2 == nil {
+				if leftNum < rightNum {
+					return -1
+				} else if leftNum > rightNum {
+					return 1
+				}
+			}
+		}
+	}
+
+	return strings.Compare(left, right)
 }

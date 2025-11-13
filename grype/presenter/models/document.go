@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/anchore/clio"
+	"github.com/anchore/grype/grype/distro"
 	"github.com/anchore/grype/grype/match"
 	"github.com/anchore/grype/grype/pkg"
 	"github.com/anchore/grype/grype/vulnerability"
@@ -20,10 +21,18 @@ type Document struct {
 }
 
 // NewDocument creates and populates a new Document struct, representing the populated JSON document.
-func NewDocument(id clio.Identification, packages []pkg.Package, context pkg.Context, matches match.Matches, ignoredMatches []match.IgnoredMatch, metadataProvider vulnerability.MetadataProvider, appConfig any, dbInfo any, strategy SortStrategy) (Document, error) {
-	timestamp, timestampErr := time.Now().Local().MarshalText()
-	if timestampErr != nil {
-		return Document{}, timestampErr
+func NewDocument(id clio.Identification, packages []pkg.Package, context pkg.Context, matches match.Matches, ignoredMatches []match.IgnoredMatch, metadataProvider vulnerability.MetadataProvider, appConfig any, dbInfo any, strategy SortStrategy, outputTimestamp bool) (Document, error) {
+	var timestamp []byte
+
+	if !outputTimestamp {
+		// can't be nil in string() call
+		timestamp = []byte{}
+	} else {
+		var timestampErr error
+		timestamp, timestampErr = time.Now().Local().MarshalText()
+		if timestampErr != nil {
+			return Document{}, timestampErr
+		}
 	}
 
 	// we must preallocate the findings to ensure the JSON document does not show "null" when no matches are found
@@ -76,7 +85,7 @@ func NewDocument(id clio.Identification, packages []pkg.Package, context pkg.Con
 		Matches:        findings,
 		IgnoredMatches: ignoredMatchModels,
 		Source:         src,
-		Distro:         newDistribution(context.Distro),
+		Distro:         newDistribution(context, selectMostCommonDistro(packages)),
 		Descriptor: descriptor{
 			Name:          id.Name,
 			Version:       id.Version,
@@ -85,4 +94,31 @@ func NewDocument(id clio.Identification, packages []pkg.Package, context pkg.Con
 			Timestamp:     string(timestamp),
 		},
 	}, nil
+}
+
+// selectMostCommonDistro selects the most common distro from the provided packages.
+func selectMostCommonDistro(pkgs []pkg.Package) *distro.Distro {
+	distros := make(map[string]*distro.Distro)
+	count := make(map[string]int)
+
+	var maxDistro *distro.Distro
+	maxCount := 0
+
+	for _, p := range pkgs {
+		if p.Distro != nil {
+			s := p.Distro.String()
+			count[s]++
+
+			if _, ok := distros[s]; !ok {
+				distros[s] = p.Distro
+			}
+
+			if count[s] > maxCount {
+				maxCount = count[s]
+				maxDistro = p.Distro
+			}
+		}
+	}
+
+	return maxDistro
 }

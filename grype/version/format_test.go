@@ -3,9 +3,6 @@ package version
 import (
 	"fmt"
 	"testing"
-
-	"github.com/anchore/grype/grype/pkg"
-	syftPkg "github.com/anchore/syft/syft/pkg"
 )
 
 func TestParseFormat(t *testing.T) {
@@ -13,22 +10,7 @@ func TestParseFormat(t *testing.T) {
 		input  string
 		format Format
 	}{
-		{
-			input:  "dpkg",
-			format: DebFormat,
-		},
-		{
-			input:  "maven",
-			format: MavenFormat,
-		},
-		{
-			input:  "gem",
-			format: GemFormat,
-		},
-		{
-			input:  "deb",
-			format: DebFormat,
-		},
+		// SemanticFormat cases
 		{
 			input:  "semantic",
 			format: SemanticFormat,
@@ -36,6 +18,134 @@ func TestParseFormat(t *testing.T) {
 		{
 			input:  "semver",
 			format: SemanticFormat,
+		},
+		{
+			input:  "npm",
+			format: SemanticFormat,
+		},
+		{
+			input:  "nuget",
+			format: SemanticFormat,
+		},
+		{
+			input:  "composer",
+			format: SemanticFormat,
+		},
+		{
+			input:  "hex",
+			format: SemanticFormat,
+		},
+		{
+			input:  "pub",
+			format: SemanticFormat,
+		},
+		{
+			input:  "swift",
+			format: SemanticFormat,
+		},
+		{
+			input:  "conan",
+			format: SemanticFormat,
+		},
+		{
+			input:  "cocoapods",
+			format: SemanticFormat,
+		},
+		{
+			input:  "hackage",
+			format: SemanticFormat,
+		},
+		// ApkFormat cases
+		{
+			input:  "apk",
+			format: ApkFormat,
+		},
+		// BitnamiFormat cases
+		{
+			input:  "bitnami",
+			format: BitnamiFormat,
+		},
+		// DebFormat cases
+		{
+			input:  "deb",
+			format: DebFormat,
+		},
+		{
+			input:  "dpkg",
+			format: DebFormat,
+		},
+		// GolangFormat cases
+		{
+			input:  "golang",
+			format: GolangFormat,
+		},
+		{
+			input:  "go",
+			format: GolangFormat,
+		},
+		// MavenFormat cases
+		{
+			input:  "maven",
+			format: MavenFormat,
+		},
+		// RpmFormat cases
+		{
+			input:  "rpm",
+			format: RpmFormat,
+		},
+		// PythonFormat cases
+		{
+			input:  "python",
+			format: PythonFormat,
+		},
+		{
+			input:  "pypi",
+			format: PythonFormat,
+		},
+		{
+			input:  "pep440",
+			format: PythonFormat,
+		},
+		// KBFormat cases
+		{
+			input:  "kb",
+			format: KBFormat,
+		},
+		// GemFormat cases
+		{
+			input:  "gem",
+			format: GemFormat,
+		},
+		// PortageFormat cases
+		{
+			input:  "portage",
+			format: PortageFormat,
+		},
+		// JVMFormat cases
+		{
+			input:  "jvm",
+			format: JVMFormat,
+		},
+		{
+			input:  "jre",
+			format: JVMFormat,
+		},
+		{
+			input:  "jdk",
+			format: JVMFormat,
+		},
+		{
+			input:  "openjdk",
+			format: JVMFormat,
+		},
+		{
+			input:  "jep223",
+			format: JVMFormat,
+		},
+		// UnknownFormat case
+		{
+			input:  "unknown",
+			format: UnknownFormat,
 		},
 	}
 
@@ -45,85 +155,6 @@ func TestParseFormat(t *testing.T) {
 			actual := ParseFormat(test.input)
 			if actual != test.format {
 				t.Errorf("mismatched user string -> format mapping, pkgType='%s': '%s'!='%s'", test.input, test.format, actual)
-			}
-		})
-	}
-}
-
-func TestFormatFromPkgType(t *testing.T) {
-	tests := []struct {
-		name   string
-		p      pkg.Package
-		format Format
-	}{
-		{
-			name: "deb",
-			p: pkg.Package{
-				Type: syftPkg.DebPkg,
-			},
-			format: DebFormat,
-		},
-		{
-			name: "java jar",
-			p: pkg.Package{
-				Type: syftPkg.JavaPkg,
-			},
-			format: MavenFormat,
-		},
-		{
-			name: "gem",
-			p: pkg.Package{
-				Type: syftPkg.GemPkg,
-			},
-			format: GemFormat,
-		},
-		{
-			name: "jvm by metadata",
-			p: pkg.Package{
-				Metadata: pkg.JavaVMInstallationMetadata{},
-			},
-			format: JVMFormat,
-		},
-		{
-			name: "jvm by type and name (jdk)",
-			p: pkg.Package{
-				Type: syftPkg.BinaryPkg,
-				Name: "jdk",
-			},
-			format: JVMFormat,
-		},
-		{
-			name: "jvm by type and name (openjdk)",
-			p: pkg.Package{
-				Type: syftPkg.BinaryPkg,
-				Name: "openjdk",
-			},
-			format: JVMFormat,
-		},
-		{
-			name: "jvm by type and name (jre)",
-			p: pkg.Package{
-				Type: syftPkg.BinaryPkg,
-				Name: "jre",
-			},
-			format: JVMFormat,
-		},
-		{
-			name: "jvm by type and name (java_se)",
-			p: pkg.Package{
-				Type: syftPkg.BinaryPkg,
-				Name: "java_se",
-			},
-			format: JVMFormat,
-		},
-	}
-
-	for _, test := range tests {
-		name := fmt.Sprintf("pkgType[%s]->format[%s]", test.p.Type, test.format)
-		t.Run(name, func(t *testing.T) {
-			actual := FormatFromPkg(test.p)
-			if actual != test.format {
-				t.Errorf("mismatched pkgType->format mapping, pkgType='%s': '%s'!='%s'", test.p.Type, test.format, actual)
 			}
 		})
 	}

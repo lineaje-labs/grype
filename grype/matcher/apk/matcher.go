@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/anchore/grype/grype/distro"
 	"github.com/anchore/grype/grype/match"
 	"github.com/anchore/grype/grype/matcher/internal"
 	"github.com/anchore/grype/grype/pkg"
@@ -15,8 +14,16 @@ import (
 	syftPkg "github.com/anchore/syft/syft/pkg"
 )
 
-type Matcher struct {
-}
+var (
+	nakVersionString = version.MustGetConstraint("< 0", version.ApkFormat).String()
+
+	// nakConstraint checks the exact version string for being an APK version with "< 0"
+	nakConstraint = search.ByConstraintFunc(func(c version.Constraint) (bool, error) {
+		return c.String() == nakVersionString, nil
+	})
+)
+
+type Matcher struct{}
 
 func (m *Matcher) PackageTypes() []syftPkg.Type {
 	return []syftPkg.Type{syftPkg.ApkPkg}
@@ -26,11 +33,11 @@ func (m *Matcher) Type() match.MatcherType {
 	return match.ApkMatcher
 }
 
-func (m *Matcher) Match(store vulnerability.Provider, p pkg.Package) ([]match.Match, []match.IgnoredMatch, error) {
+func (m *Matcher) Match(store vulnerability.Provider, p pkg.Package) ([]match.Match, []match.IgnoreFilter, error) {
 	var matches []match.Match
 
 	// direct matches with package itself
-	directMatches, err := m.findMatchesForPackage(store, p)
+	directMatches, err := m.findMatchesForPackage(store, p, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -84,14 +91,7 @@ func (m *Matcher) cpeMatchesWithoutSecDBFixes(provider vulnerability.Provider, p
 
 	secDBVulnerabilitiesByID := vulnerabilitiesByID(secDBVulnerabilities)
 
-	verObj, err := version.NewVersionFromPkg(p)
-	if err != nil {
-		if errors.Is(err, version.ErrUnsupportedVersion) {
-			log.WithFields("error", err).Tracef("skipping package '%s@%s'", p.Name, p.Version)
-			return nil, nil
-		}
-		return nil, fmt.Errorf("matcher failed to parse version pkg='%s' ver='%s': %w", p.Name, p.Version, err)
-	}
+	verObj := version.New(p.Version, pkg.VersionFormat(p))
 
 	var finalCpeMatches []match.Match
 
@@ -169,9 +169,9 @@ func vulnerabilitiesByID(vulns []vulnerability.Vulnerability) map[string][]vulne
 	return results
 }
 
-func (m *Matcher) findMatchesForPackage(store vulnerability.Provider, p pkg.Package) ([]match.Match, error) {
+func (m *Matcher) findMatchesForPackage(store vulnerability.Provider, p pkg.Package, catalogPkg *pkg.Package) ([]match.Match, error) {
 	// find SecDB matches for the given package name and version
-	secDBMatches, _, err := internal.MatchPackageByDistro(store, p, m.Type())
+	secDBMatches, _, err := internal.MatchPackageByDistro(store, p, catalogPkg, m.Type())
 	if err != nil {
 		return nil, err
 	}
@@ -193,11 +193,11 @@ func (m *Matcher) findMatchesForPackage(store vulnerability.Provider, p pkg.Pack
 	return matches, nil
 }
 
-func (m *Matcher) findMatchesForOriginPackage(store vulnerability.Provider, p pkg.Package) ([]match.Match, error) {
+func (m *Matcher) findMatchesForOriginPackage(store vulnerability.Provider, catalogPkg pkg.Package) ([]match.Match, error) {
 	var matches []match.Match
 
-	for _, indirectPackage := range pkg.UpstreamPackages(p) {
-		indirectMatches, err := m.findMatchesForPackage(store, indirectPackage)
+	for _, indirectPackage := range pkg.UpstreamPackages(catalogPkg) {
+		indirectMatches, err := m.findMatchesForPackage(store, indirectPackage, &catalogPkg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find vulnerabilities for apk upstream source package: %w", err)
 		}
@@ -206,7 +206,7 @@ func (m *Matcher) findMatchesForOriginPackage(store vulnerability.Provider, p pk
 
 	// we want to make certain that we are tracking the match based on the package from the SBOM (not the indirect package)
 	// however, we also want to keep the indirect package around for future reference
-	match.ConvertToIndirectMatches(matches, p)
+	match.ConvertToIndirectMatches(matches, catalogPkg)
 
 	return matches, nil
 }
@@ -218,9 +218,8 @@ func (m *Matcher) findMatchesForOriginPackage(store vulnerability.Provider, p pk
 // we want to report these NAK entries as match.IgnoredMatch, to allow for later processing to create ignore rules
 // based on packages which overlap by location, such as a python binary found in addition to the python APK entry --
 // we want to NAK this vulnerability for BOTH packages
-func (m *Matcher) findNaksForPackage(provider vulnerability.Provider, p pkg.Package) ([]match.IgnoredMatch, error) {
-	// TODO: this was only applying to specific distros as originally implemented; this should probably be removed:
-	if d := p.Distro; d == nil || d.Type != distro.Wolfi && d.Type != distro.Chainguard && d.Type != distro.Alpine {
+func (m *Matcher) findNaksForPackage(provider vulnerability.Provider, p pkg.Package) ([]match.IgnoreFilter, error) {
+	if p.Distro == nil {
 		return nil, nil
 	}
 
@@ -248,30 +247,25 @@ func (m *Matcher) findNaksForPackage(provider vulnerability.Provider, p pkg.Pack
 		naks = append(naks, upstreamNaks...)
 	}
 
-	var ignores []match.IgnoredMatch
+	meta, ok := p.Metadata.(pkg.ApkMetadata)
+	if !ok {
+		return nil, nil
+	}
+
+	var ignores []match.IgnoreFilter
 	for _, nak := range naks {
-		ignores = append(ignores, match.IgnoredMatch{
-			Match: match.Match{
-				Vulnerability: nak,
-				Package:       p,
-				Details:       nil, // Probably don't need details here
-			},
-			AppliedIgnoreRules: []match.IgnoreRule{
-				{
-					Vulnerability: nak.ID,
-					Reason:        "NAK",
-				},
-			},
-		})
+		for _, f := range meta.Files {
+			ignores = append(ignores,
+				match.IgnoreRule{
+					Vulnerability:  nak.ID,
+					IncludeAliases: true,
+					Reason:         "Explicit APK NAK",
+					Package: match.IgnoreRulePackage{
+						Location: f.Path,
+					},
+				})
+		}
 	}
 
 	return ignores, nil
 }
-
-var (
-	nakVersionString = version.MustGetConstraint("< 0", version.ApkFormat).String()
-	// nakConstraint checks the exact version string for being an APK version with "< 0"
-	nakConstraint = search.ByConstraintFunc(func(c version.Constraint) (bool, error) {
-		return c.String() == nakVersionString, nil
-	})
-)

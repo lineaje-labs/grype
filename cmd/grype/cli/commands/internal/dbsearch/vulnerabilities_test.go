@@ -10,7 +10,95 @@ import (
 	"github.com/stretchr/testify/require"
 
 	v6 "github.com/anchore/grype/grype/db/v6"
+	"github.com/anchore/grype/grype/vulnerability"
 )
+
+func TestGetSeverity(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []v6.Severity
+		expected string
+	}{
+		{
+			name:     "empty list",
+			input:    []v6.Severity{},
+			expected: vulnerability.UnknownSeverity.String(),
+		},
+		{
+			name: "string severity",
+			input: []v6.Severity{
+				{
+					Scheme: "HML",
+					Value:  "high",
+					Source: "nvd@nist.gov",
+					Rank:   1,
+				},
+			},
+			expected: "high",
+		},
+		{
+			name: "CVSS severity",
+			input: []v6.Severity{
+				{
+					Scheme: "CVSS_V3",
+					Value: CVSSSeverity{
+						Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+						Version: "3.1",
+						Metrics: CvssMetrics{
+							BaseScore: 9.8,
+						},
+					},
+					Source: "nvd@nist.gov",
+					Rank:   1,
+				},
+			},
+			expected: "critical",
+		},
+		{
+			name: "other value type",
+			input: []v6.Severity{
+				{
+					Scheme: "OTHER",
+					Value:  42.0,
+					Source: "custom",
+					Rank:   1,
+				},
+			},
+			expected: "42",
+		},
+		{
+			name: "multiple severities",
+			input: []v6.Severity{
+				{
+					Scheme: "HML",
+					Value:  "high",
+					Source: "nvd@nist.gov",
+					Rank:   1,
+				},
+				{
+					Scheme: "CVSS_V3",
+					Value: CVSSSeverity{
+						Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+						Version: "3.1",
+						Metrics: CvssMetrics{
+							BaseScore: 9.8,
+						},
+					},
+					Source: "nvd@nist.gov",
+					Rank:   2,
+				},
+			},
+			expected: "high",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := getSeverity(tt.input)
+			require.Equal(t, tt.expected, actual)
+		})
+	}
+}
 
 func TestNewVulnerabilityRows(t *testing.T) {
 	vap := vulnerabilityAffectedPackageJoin{
@@ -22,7 +110,23 @@ func TestNewVulnerabilityRows(t *testing.T) {
 			ModifiedDate:  ptr(time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC)),
 			WithdrawnDate: nil,
 			Provider:      &v6.Provider{ID: "provider1"},
-			BlobValue:     &v6.VulnerabilityBlob{Description: "Test description"},
+			BlobValue: &v6.VulnerabilityBlob{
+				Description: "Test description",
+				Severities: []v6.Severity{
+					{
+						Scheme: "CVSS_V3",
+						Value: CVSSSeverity{
+							Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+							Version: "3.1",
+							Metrics: CvssMetrics{
+								BaseScore: 9.8,
+							},
+						},
+						Source: "nvd@nist.gov",
+						Rank:   1,
+					},
+				},
+			},
 		},
 		OperatingSystems: []v6.OperatingSystem{
 			{Name: "Linux", MajorVersion: "5", MinorVersion: "10"},
@@ -58,12 +162,29 @@ func TestNewVulnerabilityRows(t *testing.T) {
 	expected := []Vulnerability{
 		{
 			VulnerabilityInfo: VulnerabilityInfo{
-				VulnerabilityBlob: v6.VulnerabilityBlob{Description: "Test description"},
-				Provider:          "provider1",
-				Status:            "active",
-				PublishedDate:     ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
-				ModifiedDate:      ptr(time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC)),
-				WithdrawnDate:     nil,
+				VulnerabilityBlob: v6.VulnerabilityBlob{
+					Description: "Test description",
+					Severities: []v6.Severity{
+						{
+							Scheme: "CVSS_V3",
+							Value: CVSSSeverity{
+								Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+								Version: "3.1",
+								Metrics: CvssMetrics{
+									BaseScore: 9.8,
+								},
+							},
+							Source: "nvd@nist.gov",
+							Rank:   1,
+						},
+					},
+				},
+				Severity:      "critical",
+				Provider:      "provider1",
+				Status:        "active",
+				PublishedDate: ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
+				ModifiedDate:  ptr(time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC)),
+				WithdrawnDate: nil,
 				KnownExploited: []KnownExploited{
 					{
 						CVE:                        "CVE-1234-5678",
@@ -188,6 +309,7 @@ func TestVulnerabilities(t *testing.T) {
 						},
 					},
 				},
+				Severity:      "high",
 				Provider:      "provider1",
 				Status:        "active",
 				PublishedDate: ptr(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)),
@@ -237,7 +359,7 @@ func (m *mockVulnReader) GetVulnerabilities(vuln *v6.VulnerabilitySpecifier, con
 	return args.Get(0).([]v6.VulnerabilityHandle), args.Error(1)
 }
 
-func (m *mockVulnReader) GetAffectedPackages(pkg *v6.PackageSpecifier, config *v6.GetAffectedPackageOptions) ([]v6.AffectedPackageHandle, error) {
+func (m *mockVulnReader) GetAffectedPackages(pkg *v6.PackageSpecifier, config *v6.GetPackageOptions) ([]v6.AffectedPackageHandle, error) {
 	args := m.Called(pkg, config)
 	return args.Get(0).([]v6.AffectedPackageHandle), args.Error(1)
 }
@@ -250,6 +372,11 @@ func (m *mockVulnReader) GetKnownExploitedVulnerabilities(cve string) ([]v6.Know
 func (m *mockVulnReader) GetEpss(cve string) ([]v6.EpssHandle, error) {
 	args := m.Called(cve)
 	return args.Get(0).([]v6.EpssHandle), args.Error(1)
+}
+
+func (m *mockVulnReader) GetCWEs(cve string) ([]v6.CWEHandle, error) {
+	args := m.Called(cve)
+	return args.Get(0).([]v6.CWEHandle), args.Error(1)
 }
 
 func cmpOpts() []cmp.Option {

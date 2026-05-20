@@ -49,6 +49,6 @@ func (p csafVEXProcessor) IsSupported(schemaURL string) bool {
 		log.WithFields("schema", schemaURL, "error", err).Error("failed to parse CSAF VEX schema version")
 		return false
 	}
-
+	log.WithFields("schema", schemaURL, "version", parsedVersion).Info("detected CSAF VEX schema version")
 	return parsedVersion.Major == 2
 }

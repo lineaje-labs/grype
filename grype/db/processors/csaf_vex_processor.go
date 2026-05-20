@@ -14,6 +14,7 @@ type csafVEXProcessor struct {
 }
 
 func NewV2CSAFVEXProcessor(transformer data.CSAFVEXTransformerV2) data.Processor {
+	log.WithFields("location", "new").Info("inside CSAF NewV2CSAFVEXProcessor")
 	return &csafVEXProcessor{
 		transformer: transformer,
 	}
@@ -40,6 +41,7 @@ func (p csafVEXProcessor) Process(reader io.Reader, state provider.State) ([]dat
 }
 
 func (p csafVEXProcessor) IsSupported(schemaURL string) bool {
+	log.WithFields("location", "new").Info("inside CSAF IsSupported")
 	if !hasSchemaSegment(schemaURL, "csaf-vex") {
 		return false
 	}

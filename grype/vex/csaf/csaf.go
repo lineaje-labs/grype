@@ -1,6 +1,7 @@
 package csaf
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/gocsaf/csaf/v3/csaf"
@@ -69,6 +70,7 @@ type advisories []*csaf.Advisory
 //
 //nolint:gocognit
 func (advisories advisories) matches(vulnID, purl string) *advisoryMatch {
+	fmt.Printf("Checking vulnerability %s against %s purl\n", vulnID, purl)
 	for _, adv := range advisories {
 		if adv == nil || adv.Vulnerabilities == nil {
 			continue

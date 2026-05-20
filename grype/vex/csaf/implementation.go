@@ -80,12 +80,14 @@ func newerCurrentReleaseDateFirst(a, b *csaf.Advisory) int {
 // FilterMatches takes a set of scanning results and moves any results marked in
 // the VEX data as fixed or not_affected to the ignored list.
 func (*Processor) FilterMatches(
-	docRaw any, ignoreRules []match.IgnoreRule, _ *pkg.Context, matches *match.Matches, ignoredMatches []match.IgnoredMatch,
+	docRaw any, ignoreRules []match.IgnoreRule, _ *pkg.Context, matches *match.Matches,
+	ignoredMatches []match.IgnoredMatch,
 ) (*match.Matches, []match.IgnoredMatch, error) {
 	advisories, ok := docRaw.(advisories)
 	if !ok {
 		return nil, nil, errors.New("unable to cast vex document as CSAF Advisories")
 	}
+	fmt.Println("Filtering matches against VEX data")
 
 	remainingMatches := match.NewMatches()
 	for _, m := range matches.Sorted() {
@@ -123,7 +125,8 @@ func (*Processor) FilterMatches(
 // about an affected VEX product is found on loaded VEX documents. Matches
 // are moved from the ignore list back to active matches.
 func (*Processor) AugmentMatches(
-	docRaw any, ignoreRules []match.IgnoreRule, _ *pkg.Context, matches *match.Matches, ignoredMatches []match.IgnoredMatch,
+	docRaw any, ignoreRules []match.IgnoreRule, _ *pkg.Context, matches *match.Matches,
+	ignoredMatches []match.IgnoredMatch,
 ) (*match.Matches, []match.IgnoredMatch, error) {
 	advisories, ok := docRaw.(advisories)
 	if !ok {
@@ -157,7 +160,9 @@ func (*Processor) AugmentMatches(
 
 // matchingRule cycles through a set of ignore rules and returns the first
 // one that matches the statement and the match. Returns nil if none match.
-func matchingRule(ignoreRules []match.IgnoreRule, m match.Match, advMatch *advisoryMatch, allowedStatuses []vexStatus.Status) *match.IgnoreRule {
+func matchingRule(
+	ignoreRules []match.IgnoreRule, m match.Match, advMatch *advisoryMatch, allowedStatuses []vexStatus.Status,
+) *match.IgnoreRule {
 	ms := match.NewMatches()
 	ms.Add(m)
 

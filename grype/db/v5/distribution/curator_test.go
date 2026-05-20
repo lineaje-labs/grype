@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/gookit/color"
+	"github.com/mholt/archives"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -127,7 +128,7 @@ func Test_defaultHTTPClientTimeout(t *testing.T) {
 }
 
 func generateCertFixture(t *testing.T) string {
-	path := "test-fixtures/tls/server.crt"
+	path := "testdata/tls/server.crt"
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		// fixture already exists...
 		return path
@@ -141,7 +142,7 @@ func generateCertFixture(t *testing.T) string {
 	}
 
 	cmd := exec.Command("make", "server.crt")
-	cmd.Dir = filepath.Join(cwd, "test-fixtures/tls")
+	cmd.Dir = filepath.Join(cwd, "testdata/tls")
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -253,35 +254,35 @@ func TestCuratorValidate(t *testing.T) {
 	}{
 		{
 			name:              "good checksum & good constraint",
-			fixture:           "test-fixtures/curator-validate/good-checksum",
+			fixture:           "testdata/curator-validate/good-checksum",
 			cfgValidateDbHash: true,
 			constraint:        1,
 			err:               false,
 		},
 		{
 			name:              "good checksum & bad constraint",
-			fixture:           "test-fixtures/curator-validate/good-checksum",
+			fixture:           "testdata/curator-validate/good-checksum",
 			cfgValidateDbHash: true,
 			constraint:        2,
 			err:               true,
 		},
 		{
 			name:              "bad checksum & good constraint",
-			fixture:           "test-fixtures/curator-validate/bad-checksum",
+			fixture:           "testdata/curator-validate/bad-checksum",
 			cfgValidateDbHash: true,
 			constraint:        1,
 			err:               true,
 		},
 		{
 			name:              "bad checksum & bad constraint",
-			fixture:           "test-fixtures/curator-validate/bad-checksum",
+			fixture:           "testdata/curator-validate/bad-checksum",
 			cfgValidateDbHash: true,
 			constraint:        2,
 			err:               true,
 		},
 		{
 			name:              "bad checksum ignored on config exception",
-			fixture:           "test-fixtures/curator-validate/bad-checksum",
+			fixture:           "testdata/curator-validate/bad-checksum",
 			cfgValidateDbHash: false,
 			constraint:        1,
 			err:               false,
@@ -356,7 +357,7 @@ func TestCurator_validateStaleness(t *testing.T) {
 				validateAge:     true,
 				md:              Metadata{Built: now.UTC().Add(-4 * time.Hour)},
 			},
-			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
 				return assert.ErrorContains(t, err, "the vulnerability database was built")
 			},
 		},
@@ -765,4 +766,34 @@ func TestCurator_Update_setLastSuccessfulUpdateCheck_notCalled(t *testing.T) {
 		require.NoFileExists(t, filepath.Join(t.TempDir(), lastUpdateCheckFileName))
 	})
 
+}
+
+func Test_unarchive(t *testing.T) {
+	testFile := filepath.Join(t.TempDir(), "vulnerability.db")
+	f, err := os.Create(testFile)
+	require.NoError(t, err)
+	f.Close()
+
+	files, err := archives.FilesFromDisk(t.Context(), nil, map[string]string{
+		testFile: "",
+	})
+	require.NoError(t, err)
+
+	source := filepath.Join(t.TempDir(), "archive.tar.zst")
+	out, err := os.Create(source)
+	require.NoError(t, err)
+
+	format := archives.CompressedArchive{
+		Compression: archives.Zstd{},
+		Archival:    archives.Tar{},
+	}
+	err = format.Archive(t.Context(), out, files)
+	require.NoError(t, err)
+
+	destination := t.TempDir()
+	err = unarchive(source, destination)
+	require.NoError(t, err)
+
+	expectFile := filepath.Join(destination, "vulnerability.db")
+	require.FileExists(t, expectFile)
 }

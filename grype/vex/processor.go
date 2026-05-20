@@ -24,12 +24,16 @@ type vexProcessorImplementation interface {
 	// FilterMatches matches receives the underlying VEX implementation VEX data and
 	// the scanning context and matching results and filters the fixed and
 	// not_affected results,moving them to the list of ignored matches.
-	FilterMatches(any, []match.IgnoreRule, *pkg.Context, *match.Matches, []match.IgnoredMatch) (*match.Matches, []match.IgnoredMatch, error)
+	FilterMatches(
+		any, []match.IgnoreRule, *pkg.Context, *match.Matches, []match.IgnoredMatch,
+	) (*match.Matches, []match.IgnoredMatch, error)
 
 	// AugmentMatches reads known affected VEX products from loaded documents and
 	// adds new results to the scanner results when the product is marked as
 	// affected in the VEX data.
-	AugmentMatches(any, []match.IgnoreRule, *pkg.Context, *match.Matches, []match.IgnoredMatch) (*match.Matches, []match.IgnoredMatch, error)
+	AugmentMatches(
+		any, []match.IgnoreRule, *pkg.Context, *match.Matches, []match.IgnoredMatch,
+	) (*match.Matches, []match.IgnoredMatch, error)
 }
 
 // getVexImplementation this function returns the vex processor implementation
@@ -78,7 +82,10 @@ type ProcessorOptions struct {
 // ApplyVEX receives the results from a scan run and applies any VEX information
 // in the files specified in the grype invocation. Any filtered results will
 // be moved to the ignored matches slice.
-func (vm *Processor) ApplyVEX(pkgContext *pkg.Context, remainingMatches *match.Matches, ignoredMatches []match.IgnoredMatch) (*match.Matches, []match.IgnoredMatch, error) {
+func (vm *Processor) ApplyVEX(
+	pkgContext *pkg.Context, remainingMatches *match.Matches, ignoredMatches []match.IgnoredMatch,
+) (*match.Matches, []match.IgnoredMatch, error) {
+	fmt.Println("Applying VEX")
 	var err error
 
 	// If no VEX documents are loaded, just pass through the matches, effectively NOOP
@@ -87,8 +94,10 @@ func (vm *Processor) ApplyVEX(pkgContext *pkg.Context, remainingMatches *match.M
 	}
 
 	// Read VEX data from all passed documents
+	fmt.Println("Reading VEX data")
 	rawVexData, err := vm.impl.ReadVexDocuments(vm.Options.Documents)
 	if err != nil {
+		fmt.Printf("Error reading VEX data: %v\n", err)
 		return nil, nil, fmt.Errorf("parsing vex document: %w", err)
 	}
 

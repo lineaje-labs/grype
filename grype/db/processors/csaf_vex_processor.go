@@ -1,6 +1,7 @@
 package processors // nolint:dupl
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/anchore/grype/grype/db/data"
@@ -14,6 +15,7 @@ type csafVEXProcessor struct {
 }
 
 func NewV2CSAFVEXProcessor(transformer data.CSAFVEXTransformerV2) data.Processor {
+	fmt.Println("Inside NewV2CSAFVEXProcessor")
 	log.WithFields("location", "new").Info("inside CSAF NewV2CSAFVEXProcessor")
 	return &csafVEXProcessor{
 		transformer: transformer,

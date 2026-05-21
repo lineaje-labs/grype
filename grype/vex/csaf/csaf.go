@@ -70,7 +70,7 @@ type advisories []*csaf.Advisory
 //
 //nolint:gocognit
 func (advisories advisories) matches(vulnID, purl string) *advisoryMatch {
-	fmt.Printf("Checking vulnerability %s against %s purl, checking count of advisories: %d\n", vulnID, purl, len(advisories))
+	fmt.Printf("Checking vulnerability %s against %s purl, checking count of vulnerabilities: %d\n", vulnID, purl, len(advisories[0].Vulnerabilities))
 	for _, adv := range advisories {
 		if adv == nil || adv.Vulnerabilities == nil {
 			continue
@@ -106,6 +106,7 @@ func (advisories advisories) matches(vulnID, purl string) *advisoryMatch {
 				recommended:        vuln.ProductStatus.Recommended,
 				underInvestigation: vuln.ProductStatus.UnderInvestigation,
 			}
+			fmt.Printf("Found vulnerability %s with productbystatus - %v\n", vulnID, productsByStatus)
 			for status, products := range productsByStatus {
 				if products == nil {
 					continue

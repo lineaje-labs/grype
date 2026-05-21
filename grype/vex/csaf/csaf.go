@@ -82,6 +82,7 @@ func (advisories advisories) matches(vulnID, purl string) *advisoryMatch {
 				if p == nil {
 					continue
 				}
+				fmt.Printf("Comparing product ID %s found for PURL %s\n", *p, purl)
 				if slices.Contains(purlsFromProductIdentificationHelpers(adv.ProductTree.CollectProductIdentificationHelpers(*p)), purl) {
 					fmt.Printf("Found product ID %s for PURL %s\n", *p, purl)
 					return *p

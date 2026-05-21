@@ -42,8 +42,9 @@ func (*Processor) ReadVexDocuments(docs []string) (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error loading VEX CSAF document: %w", err)
 		}
-		fmt.Printf("Loaded count %d  of advisories from %s\n", len(advs), doc)
 		advs = append(advs, adv)
+		fmt.Printf("Loaded count %d of advisories from %s\n", len(advs), doc)
+		fmt.Printf("Loaded count %d of vulnerabilities from %s\n", len(adv.Vulnerabilities), doc)
 	}
 
 	slices.SortStableFunc(advs, newerCurrentReleaseDateFirst)

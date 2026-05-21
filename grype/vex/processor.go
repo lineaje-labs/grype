@@ -102,7 +102,6 @@ func (vm *Processor) ApplyVEX(
 	}
 
 	vexRules := extractVexRules(vm.Options.IgnoreRules)
-	fmt.Printf("Number of VEX rules: %d\n", len(vexRules))
 
 	remainingMatches, ignoredMatches, err = vm.impl.FilterMatches(
 		rawVexData, vexRules, pkgContext, remainingMatches, ignoredMatches,

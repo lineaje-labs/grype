@@ -131,6 +131,6 @@ func purlsFromProductIdentificationHelpers(helpers []*csaf.ProductIdentification
 		}
 		purls = append(purls, string(*helper.PURL))
 	}
-	fmt.Printf("Found %d PURLs from product identification helpers\n", len(purls))
+	fmt.Printf("Found %v PURLs from product identification helpers\n", purls)
 	return purls
 }

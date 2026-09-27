@@ -263,10 +263,7 @@ func TestPresenter_Present(t *testing.T) {
 			},
 			wantErr: false,
 			outputCheck: func(t *testing.T, output string) {
-				if !strings.Contains(output, `"dependencies":[{"bom_ref":"parent1-bom-ref","depends_on":["child11-bom-ref"]},{"bom_ref":"parent2-bom-ref","depends_on":["child11-bom-ref"]},{"bom_ref":"child11-bom-ref","depends_on":[]}]`) &&
-					!strings.Contains(output, `"dependencies":[{"bom_ref":"parent2-bom-ref","depends_on":["child11-bom-ref"]},{"bom_ref":"child11-bom-ref","depends_on":[]},{"bom_ref":"parent1-bom-ref","depends_on":["child11-bom-ref"]}]`) {
-					assert.Failf(t, "output - %s does not contain either of expected data", output)
-				}
+				assert.Contains(t, output, `"dependencies":[{"bom_ref":"child11-bom-ref","depends_on":[]},{"bom_ref":"parent1-bom-ref","depends_on":["child11-bom-ref"]},{"bom_ref":"parent2-bom-ref","depends_on":["child11-bom-ref"]}]`)
 			},
 		},
 		{
@@ -301,10 +298,7 @@ func TestPresenter_Present(t *testing.T) {
 			},
 			wantErr: false,
 			outputCheck: func(t *testing.T, output string) {
-				if !strings.Contains(output, `"dependencies":[{"bom_ref":"child1-bom-ref","depends_on":[]},{"bom_ref":"parent11-bom-ref","depends_on":["child1-bom-ref"]}]`) &&
-					!strings.Contains(output, `"dependencies":[{"bom_ref":"parent11-bom-ref","depends_on":["child1-bom-ref"]},{"bom_ref":"child1-bom-ref","depends_on":[]}]`) {
-					assert.Failf(t, "output - %s does not contain either of expected data", output)
-				}
+				assert.Contains(t, output, `"dependencies":[{"bom_ref":"child1-bom-ref","depends_on":[]},{"bom_ref":"parent11-bom-ref","depends_on":["child1-bom-ref"]}]`)
 			},
 		},
 	}

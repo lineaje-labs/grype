@@ -31,6 +31,27 @@ builds:
       -X main.buildDate={{.Date}}
       -X main.gitDescription={{.Summary}}
 
+  - id: linux-server-build
+    dir: ./cmd/grype-server
+    binary: grype-server
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+      - ppc64le
+      - s390x
+    # set the modified timestamp on the output binary to the git timestamp to ensure a reproducible build
+    mod_timestamp: &build-timestamp '{{ .CommitTimestamp }}'
+    ldflags: &build-ldflags |
+      -w
+      -s
+      -extldflags '-static'
+      -X main.version={{.Version}}
+      -X main.gitCommit={{.Commit}}
+      -X main.buildDate={{.Date}}
+      -X main.gitDescription={{.Summary}}
+
   - id: darwin-build
     dir: ./cmd/grype
     binary: grype
@@ -56,6 +77,7 @@ archives:
   - id: linux-archives
     ids:
       - linux-build
+      - linux-server-build
 
   - id: darwin-archives
     ids:

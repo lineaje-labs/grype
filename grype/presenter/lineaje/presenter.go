@@ -2,11 +2,13 @@ package lineaje
 
 import (
 	"encoding/json"
-	"github.com/anchore/grype/grype/presenter/models"
-	"github.com/anchore/syft/syft/sbom"
 	"io"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/anchore/grype/grype/presenter/models"
+	"github.com/anchore/syft/syft/sbom"
 )
 
 type Presenter struct {
@@ -172,5 +174,8 @@ func createDependencyMapForReport(bomRefDepMap map[string]*Set[string]) []Compon
 		}
 		dependencies = append(dependencies, dependency)
 	}
+	sort.Slice(dependencies, func(i, j int) bool {
+		return dependencies[i].BomRef < dependencies[j].BomRef
+	})
 	return dependencies
 }

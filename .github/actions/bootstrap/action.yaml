@@ -29,12 +29,12 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: anchore/go-make/.github/actions/setup@88c36505984649108439f13fb35dcaea4ce61d94 # v0.4.0
+    - uses: anchore/go-make/.github/actions/setup@fa5421b3bf24c9d18f11a736c5eb4172f2b7d683 # v0.8.1
       with:
         go-version: ${{ inputs.go-version }}
         cache-key-prefix: ${{ inputs.cache-key-prefix }}
 
-    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       if: inputs.python-version != ''
       with:
         python-version: ${{ inputs.python-version }}
@@ -51,7 +51,7 @@ runs:
     # restore-only on non-default branches and forks to prevent untrusted runs from polluting the cache
     - name: Restore test fixture cache
       id: test-fixture-cache-restore
-      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       if: ${{ inputs.cache-test-fixtures == 'true' && (github.ref != format('refs/heads/{0}', github.event.repository.default_branch) || github.event.repository.fork == true) }}
       with:
         path: |
@@ -63,7 +63,7 @@ runs:
     # read+write only on the default branch of the upstream repo
     - name: Restore and save test fixture cache
       id: test-fixture-cache
-      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       if: ${{ inputs.cache-test-fixtures == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event.repository.fork == false }}
       with:
         path: |

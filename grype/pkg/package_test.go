@@ -130,6 +130,7 @@ func TestNew(t *testing.T) {
 			},
 			metadata: RpmMetadata{
 				Epoch: intRef(30),
+				Arch:  "arch-info",
 			},
 			upstreams: []UpstreamPackage{
 				{
@@ -168,6 +169,7 @@ func TestNew(t *testing.T) {
 			},
 			metadata: RpmMetadata{
 				Epoch: intRef(30),
+				Arch:  "arch-info",
 			},
 			upstreams: []UpstreamPackage{
 				{
@@ -184,7 +186,8 @@ func TestNew(t *testing.T) {
 					SourceRpm: "sqlite-3.26.0-6.el8.src.rpm",
 				},
 			},
-			metadata: RpmMetadata{},
+			// source matches the package name (so no upstream) and neither epoch nor
+			// modularity is set, so grype keeps nothing: metadata is nil, not an empty struct.
 		},
 		{
 			name: "rpm archive with modularity label",
@@ -260,14 +263,57 @@ func TestNew(t *testing.T) {
 					InstalledSize: 1,
 				},
 			},
+			metadata: ApkMetadata{
+				Files: []ApkFileRecord{},
+				Arch:  "a",
+			},
 			upstreams: []UpstreamPackage{
 				{
 					Name: "libcurl",
 				},
 			},
-			metadata: ApkMetadata{Files: []ApkFileRecord{}},
+		},
+		{
+			name: "apk with architecture only",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.ApkDBEntry{
+					Architecture: "amd64",
+				},
+			},
+			metadata: ApkMetadata{
+				Files: []ApkFileRecord{},
+				Arch:  "amd64",
+			},
+		},
+		{
+			name: "apk with no architecture or files",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.ApkDBEntry{
+					Package: "some-pkg",
+					Version: "1.0.0",
+				},
+			},
+			// neither architecture nor files: metadata is nil
 		},
 		// the below packages are those that have no metadata or upstream info to parse out
+		{
+			name: "bun-lock-entry",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.BunLockEntry{},
+			},
+		},
+		{
+			name: "deno-lock-entry",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.DenoLockEntry{},
+			},
+		},
+		{
+			name: "deno-remote-lock-entry",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.DenoRemoteLockEntry{},
+			},
+		},
 		{
 			name: "npm-metadata",
 			syftPkg: syftPkg.Package{
@@ -957,6 +1003,76 @@ func TestNew(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "apple-app-bundle-entry",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.AppleAppBundleEntry{
+					BundleIdentifier:     "com.apple.Safari",
+					Name:                 "Safari",
+					DisplayName:          "Safari",
+					Executable:           "Safari",
+					ShortVersion:         "17.0",
+					Version:              "17600.1.1",
+					PackageType:          "APPL",
+					SupportedPlatforms:   []string{"MacOSX"},
+					MinimumSystemVersion: "14.0",
+					MinimumOSVersion:     "14.0",
+					Copyright:            "Copyright © 2024 Apple Inc.",
+					PlatformName:         "macosx",
+					SDKName:              "macosx14.0",
+				},
+			},
+		},
+		{
+			name: "vcpkg-manifest",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.VcpkgManifest{
+					Description:   []string{"Test package"},
+					Documentation: "https://example.com/docs",
+					FullVersion:   "1.2.3#1",
+					Version:       "1.2.3",
+					PortVersion:   1,
+					Maintainers:   []string{"maintainer1"},
+					Name:          "test-package",
+					Supports:      "!windows",
+					Registry: &syftPkg.VcpkgRegistryEntry{
+						Baseline:   "abc123",
+						Kind:       syftPkg.Git,
+						Packages:   []string{"test-package"},
+						Repository: "https://github.com/microsoft/vcpkg",
+					},
+					Triplet: "x64-linux",
+				},
+			},
+		},
+		{
+			name: "safetensors-model-info",
+			syftPkg: syftPkg.Package{
+				Metadata: syftPkg.SafeTensorsModelInfo{
+					Format:       "safetensors",
+					Architecture: "LlamaForCausalLM",
+					Quantization: "BF16",
+					Parameters:   7000000000,
+					TensorCount:  291,
+					TotalSize:    "13476839424",
+					ShardCount:   2,
+					UserMetadata: syftPkg.KeyValues{
+						{
+							Key:   "key1",
+							Value: "value1",
+						},
+					},
+					MetadataHash: "abc123",
+					Parts: []syftPkg.SafeTensorsModelInfo{
+						{
+							Format:       "safetensors",
+							TensorCount:  145,
+							MetadataHash: "def456",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	// capture each observed metadata type, we should see all of them relate to what syft provides by the end of testing
@@ -1529,7 +1645,7 @@ func Test_ExcludeRetainsCorrectRelationships(t *testing.T) {
 
 	d := distro.FromRelease(s.Artifacts.LinuxDistribution, nil)
 	pkgs := FromCollection(s.Artifacts.Packages, s.Relationships, SynthesisConfig{},
-		setDistroFromPURL(func(d *distro.Distro) bool { return true }),
+		setDistroFromPURL(func(d *distro.Distro) {}),
 		func(out *Package, _ packageurl.PackageURL, _ syftPkg.Package) {
 			if out.Type == syftPkg.ApkPkg {
 				out.Distro = d

@@ -274,7 +274,8 @@ func TestResolveEUSDisclosures(t *testing.T) {
 							},
 						},
 					},
-					Details: []match.Detail{{Type: match.ExactDirectMatch}},
+					// the disclosure and the advisory each contribute a detail, collapsed by match.Matches.Add
+					Details: []match.Detail{{Type: match.ExactDirectMatch}, {Type: match.ExactDirectMatch}},
 				},
 			},
 		},
@@ -399,7 +400,7 @@ func TestResolveEUSDisclosures(t *testing.T) {
 							},
 						},
 					},
-					Details: []match.Detail{{Type: match.ExactDirectMatch}},
+					Details: []match.Detail{{Type: match.ExactDirectMatch}, {Type: match.ExactDirectMatch}},
 				},
 			},
 		},
@@ -554,7 +555,7 @@ func TestResolveEUSDisclosures(t *testing.T) {
 							},
 						},
 					},
-					Details: []match.Detail{{Type: match.ExactDirectMatch}},
+					Details: []match.Detail{{Type: match.ExactDirectMatch}, {Type: match.ExactDirectMatch}},
 				},
 			},
 		},
@@ -741,7 +742,7 @@ func TestResolveEUSDisclosures(t *testing.T) {
 							},
 						},
 					},
-					Details: []match.Detail{{Type: match.ExactDirectMatch}},
+					Details: []match.Detail{{Type: match.ExactDirectMatch}, {Type: match.ExactDirectMatch}},
 				},
 			},
 		},
@@ -806,6 +807,7 @@ func TestRedhatEUSMatches_VulnerableOnEUS(t *testing.T) {
 			matcher := Matcher{}
 			// EUS 9.4 fix is 5.14.0-427.68.1.el9_4; 100 < 427 → vulnerable
 			p := dbtest.NewPackage("kernel", "0:5.14.0-100.el9_4", syftPkg.RpmPkg).
+				WithArchitecture("x86_64").
 				WithDistro(newEUSDistro("9.4")).
 				WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
 				Build()
@@ -832,6 +834,7 @@ func TestRedhatEUSMatches_IndirectMatchBySource(t *testing.T) {
 		Run(func(t *testing.T, db *dbtest.DB) {
 			matcher := Matcher{}
 			p := dbtest.NewPackage("kernel-tools", "0:5.14.0-100.el9_4", syftPkg.RpmPkg).
+				WithArchitecture("aarch64").
 				WithDistro(newEUSDistro("9.4")).
 				WithUpstream("kernel", "0:5.14.0-100.el9_4").
 				WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
@@ -854,6 +857,7 @@ func TestRedhatEUSMatches_FixedOnEUS(t *testing.T) {
 		Run(func(t *testing.T, db *dbtest.DB) {
 			matcher := Matcher{}
 			p := dbtest.NewPackage("kernel", "0:5.14.0-427.68.1.el9_4", syftPkg.RpmPkg).
+				WithArchitecture("x86_64").
 				WithDistro(newEUSDistro("9.4")).
 				WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
 				Build()
@@ -874,6 +878,7 @@ func TestRedhatEUSMatches_BetweenEUSAndMainFix(t *testing.T) {
 			matcher := Matcher{}
 			// 450 > EUS fix 427.68 but < main fix 503.11 → resolved per EUS
 			p := dbtest.NewPackage("kernel", "0:5.14.0-450.el9_4", syftPkg.RpmPkg).
+				WithArchitecture("x86_64").
 				WithDistro(newEUSDistro("9.4")).
 				WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
 				Build()
@@ -892,6 +897,7 @@ func TestRedhatEUSMatches_MultipleCVEsAllVulnerable(t *testing.T) {
 	dbtest.DBs(t, "rhel9-eus").Run(func(t *testing.T, db *dbtest.DB) {
 		matcher := Matcher{}
 		p := dbtest.NewPackage("kernel", "0:5.14.0-300.el9_4", syftPkg.RpmPkg).
+			WithArchitecture("aarch64").
 			WithDistro(newEUSDistro("9.4")).
 			WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
 			Build()
@@ -918,6 +924,7 @@ func TestRedhatEUSMatches_MultipleCVEsAllIgnored(t *testing.T) {
 		matcher := Matcher{}
 		pkgID := pkg.ID("kernel-past-fixes")
 		p := dbtest.NewPackage("kernel", "0:5.14.0-500.el9_4", syftPkg.RpmPkg).
+			WithArchitecture("x86_64").
 			WithID(pkgID).
 			WithDistro(newEUSDistro("9.4")).
 			WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
@@ -942,6 +949,7 @@ func TestRedhatEUSIgnoreFilters_FixedProducesIgnore(t *testing.T) {
 			matcher := Matcher{}
 			pkgID := pkg.ID("kernel-eus-fixed")
 			p := dbtest.NewPackage("kernel", "0:5.14.0-427.68.1.el9_4", syftPkg.RpmPkg).
+				WithArchitecture("x86_64").
 				WithID(pkgID).
 				WithDistro(newEUSDistro("9.4")).
 				WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
@@ -962,6 +970,7 @@ func TestRedhatEUSIgnoreFilters_VulnerablePackageNoIgnores(t *testing.T) {
 		Run(func(t *testing.T, db *dbtest.DB) {
 			matcher := Matcher{}
 			p := dbtest.NewPackage("kernel", "0:5.14.0-200.el9_4", syftPkg.RpmPkg).
+				WithArchitecture("aarch64").
 				WithDistro(newEUSDistro("9.4")).
 				WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
 				Build()
@@ -972,6 +981,112 @@ func TestRedhatEUSIgnoreFilters_VulnerablePackageNoIgnores(t *testing.T) {
 				eus94CVE20240340MainlineConstraint,
 				match.ExactDirectMatch)
 		})
+}
+
+// TestRedhatEUSMatches_HigherMinorOnlyFixStaysVulnerable locks in the pinned-EUS
+// guarantee that an unreachable higher-minor fix must NOT clear a vulnerable host.
+//
+// Real data: RHEL 8 CVE-2016-9840 (rsync). Its only RHEL 8 fix is 0:3.1.3-23.el8_10
+// shipped by RHSA-2025:8395 on the .el8_10 (minor 10) stream, and there is no
+// rhel:8.x+eus overlay for this CVE anywhere in the source data. A host pinned to
+// 8.4+eus cannot reach a .el8_10 build (minor 10 > 4), so the fix is unreachable and
+// the host must remain a MATCH. Because the only fix is unreachable, the matcher
+// reports the finding with FixStateNotFixed rather than clearing it.
+func TestRedhatEUSMatches_HigherMinorOnlyFixStaysVulnerable(t *testing.T) {
+	dbtest.DBs(t, "rhel9-eus").
+		SelectOnly("CVE-2016-9840").
+		Run(func(t *testing.T, db *dbtest.DB) {
+			matcher := Matcher{}
+			// only fix is 0:3.1.3-23.el8_10 (minor 10, unreachable from 8.4);
+			// pkg at 3.1.3-19 < 3.1.3-23 → vulnerable, and the fix must not clear it
+			p := dbtest.NewPackage("rsync", "0:3.1.3-19.el8", syftPkg.RpmPkg).
+				WithDistro(newEUSDistro("8.4")).
+				WithMetadata(pkg.RpmMetadata{Epoch: intPtr(0)}).
+				Build()
+
+			findings := db.Match(t, &matcher, p)
+			// the unreachable higher-minor fix must not be applied → still vulnerable,
+			// reported as not-fixed for this EUS host
+			sf := findings.SelectMatch("CVE-2016-9840")
+			sf.HasFix(vulnerability.FixStateNotFixed)
+			// there is no +eus overlay for this CVE, so the finding carries two
+			// base-distro details both searched against the only (unreachable)
+			// .el8_10 fix: the disclosure lookup at 8.4 and the resolution lookup
+			// at 8.4+eus.
+			const higherMinorConstraint = "< 0:3.1.3-23.el8_10 (rpm)"
+			sf.SelectDetailByDistro("redhat", "8.4", higherMinorConstraint).HasMatchType(match.ExactDirectMatch)
+			sf.SelectDetailByDistro("redhat", "8.4+eus", higherMinorConstraint).HasMatchType(match.ExactDirectMatch)
+		})
+}
+
+// TestRedhatEUSMatches_LowerReachableFixResolvesDespiteHigherFix locks in the
+// pinned-EUS guarantee that when a CVE has both a reachable fix and an unreachable
+// higher-minor fix, the reachable fix resolves the disclosure and the unreachable
+// one must not resurrect a false positive.
+//
+// Real data: RHEL 8 CVE-2020-7788 (nodejs:14 module). The base rhel:8 disclosure
+// records a disjoint VulnerableRange whose top fix is the unreachable higher .el8_5
+// (minor 5) mainline rebase 1:14.18.2-2.module+el8.5.0+13644+8d46dafd (RHSA-2022:0350);
+// the rhel:8.4+eus overlay carries the reachable .el8_4 (minor 4) backport
+// 1:14.18.2-2.module+el8.4.0+13643+6c0ebf22 (RHSA-2022:0246). A host pinned to 8.4+eus
+// and carrying the reachable .el8_4 backport must be treated as resolved: the CVE must
+// NOT match, and the matcher emits a "Distro Not Vulnerable" ignore. The unreachable
+// .el8_5 mainline fix must not cause a match.
+func TestRedhatEUSMatches_LowerReachableFixResolvesDespiteHigherFix(t *testing.T) {
+	dbtest.DBs(t, "rhel9-eus").
+		SelectOnly("CVE-2020-7788").
+		Run(func(t *testing.T, db *dbtest.DB) {
+			matcher := Matcher{}
+			pkgID := pkg.ID("nodejs-at-reachable-eus-fix")
+			// reachable EUS fix is 1:14.18.2-2.module+el8.4.0+13643+6c0ebf22; pkg AT that
+			// build → resolved. The unreachable higher .el8_5 mainline fix must not match.
+			p := dbtest.NewPackage("nodejs", "1:14.18.2-2.module+el8.4.0+13643+6c0ebf22", syftPkg.RpmPkg).
+				WithID(pkgID).
+				WithDistro(newEUSDistro("8.4")).
+				WithMetadata(pkg.RpmMetadata{Epoch: intPtr(1), ModularityLabel: strRef("nodejs:14")}).
+				Build()
+
+			findings := db.Match(t, &matcher, p)
+			// no match; resolved by the reachable EUS fix
+			findings.Ignores().
+				SelectRelatedPackageIgnore(IgnoreReasonDistroNotVulnerable, "CVE-2020-7788").
+				ForPackage(pkgID)
+		})
+}
+
+// TestRedhatEUSMatches_MissingEpochStrategy documents that the rpm EUS binary path deliberately does NOT behave like
+// the dpkg ESM path for a missing epoch - so RHEL EUS does not share the deb epoch bug (see the dpkg twin
+// TestUbuntuESM_MissingEpochStrategy).
+//
+// nginx on 9.4+eus is fixed at "1:1.20.1-14.el9_4" (non-zero epoch); the installed build is the same but omits the
+// epoch. Unlike dpkg, the rpm binary matcher fills a missing epoch with an explicit 0 (matchPackage ->
+// addEpochIfApplicable), because per RedHat a binary rpm with no epoch genuinely IS epoch 0. That makes the install
+// "0:1.20.1-14.el9_4", which is a real, older version lineage than the epoch-1 fix, so the package is correctly
+// reported vulnerable under BOTH strategies - auto never fires because the epoch is explicit (not missing) by the
+// time comparison happens. (auto only matters on the rpm source/upstream path, which drops epochs on purpose.)
+func TestRedhatEUSMatches_MissingEpochStrategy(t *testing.T) {
+	const (
+		cve = "CVE-2024-7347"
+		// same build as the fix "1:1.20.1-14.el9_4" but with no epoch prefix; the binary matcher normalizes this to 0:
+		installedNoEpoch = "1.20.1-14.el9_4"
+	)
+
+	// both strategies report vulnerable: the missing epoch is normalized to an explicit 0, so 0:... < 1:... regardless
+	for _, strategy := range []version.MissingEpochStrategy{version.MissingEpochStrategyZero, version.MissingEpochStrategyAuto} {
+		t.Run(string(strategy), func(t *testing.T) {
+			dbtest.DBs(t, "rhel9-eus").
+				SelectOnly(cve).
+				Run(func(t *testing.T, db *dbtest.DB) {
+					matcher := NewRpmMatcher(MatcherConfig{MissingEpochStrategy: strategy})
+					p := dbtest.NewPackage("nginx", installedNoEpoch, syftPkg.RpmPkg).
+						WithDistro(newEUSDistro("9.4")).
+						Build()
+
+					findings := db.Match(t, matcher, p)
+					findings.SkipCompleteness().SelectMatch(cve)
+				})
+		})
+	}
 }
 
 // newEUSDistro creates a properly initialized RHEL EUS distro using distro.New().

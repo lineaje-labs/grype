@@ -29,9 +29,10 @@ var (
 	Alpine318 = distro.New(distro.Alpine, "3.18", "")
 	Alpine319 = distro.New(distro.Alpine, "3.19", "")
 
-	// Wolfi is rolling; version is unused for matching but preserved here for
-	// readability at call sites.
-	WolfiRolling = distro.New(distro.Wolfi, "", "")
+	// Wolfi and Chainguard are both rolling-release apk distros; version is
+	// unused for matching but preserved here for readability at call sites.
+	WolfiRolling      = distro.New(distro.Wolfi, "", "")
+	ChainguardRolling = distro.New(distro.Chainguard, "", "")
 
 	RHEL7  = distro.New(distro.RedHat, "7", "")
 	RHEL8  = distro.New(distro.RedHat, "8", "")
@@ -48,7 +49,8 @@ var (
 
 // PackageBuilder provides a fluent API for building test packages.
 type PackageBuilder struct {
-	pkg pkg.Package
+	pkg  pkg.Package
+	arch string
 }
 
 // NewPackage creates a new PackageBuilder with the given name, version, and type.
@@ -64,9 +66,26 @@ func NewPackage(name, version string, t syftPkg.Type) *PackageBuilder {
 	}
 }
 
+// newPackageBuilderFromPackage seeds a builder from an already-constructed
+// package (e.g. one cataloged from a real binary fixture), preserving its ID,
+// metadata, and symbols. Call sites typically override just the version.
+func newPackageBuilderFromPackage(p pkg.Package) *PackageBuilder {
+	return &PackageBuilder{pkg: p}
+}
+
 // WithType sets the package type (e.g., syftPkg.ApkPkg, syftPkg.RpmPkg).
 func (b *PackageBuilder) WithType(t syftPkg.Type) *PackageBuilder {
 	b.pkg.Type = t
+	return b
+}
+
+// WithVersion overrides the package version. This is useful with packages
+// seeded from real artifacts (e.g. GoBinaryFixture), where the version compiled
+// into the binary — such as the toolchain's stdlib version — must be set to a
+// value inside a specific advisory's vulnerable range while the real metadata
+// and symbols are preserved.
+func (b *PackageBuilder) WithVersion(version string) *PackageBuilder {
+	b.pkg.Version = version
 	return b
 }
 
@@ -81,6 +100,15 @@ func (b *PackageBuilder) WithID(id pkg.ID) *PackageBuilder {
 // WithDistro sets the package's distro.
 func (b *PackageBuilder) WithDistro(d *distro.Distro) *PackageBuilder {
 	b.pkg.Distro = d
+	return b
+}
+
+// WithArchitecture sets the package architecture (e.g., "x86_64", "aarch64"), stamped onto
+// the rpm metadata at Build time. Read by the architectureQualifier at match time to match a
+// package against the architecture a vulnerability entry applies to. Applied last so it
+// composes with WithMetadata regardless of call order.
+func (b *PackageBuilder) WithArchitecture(arch string) *PackageBuilder {
+	b.arch = arch
 	return b
 }
 
@@ -127,6 +155,20 @@ func (b *PackageBuilder) WithMetadata(metadata interface{}) *PackageBuilder {
 	return b
 }
 
+// WithGoBinarySymbols attaches Go binary symbol evidence the way the real provider does: the given
+// table (import path -> raw local symbol names, exactly the shape syft's golang cataloger emits in
+// GolangBinaryBuildinfoEntry.Symbols, e.g. "(*Client).Do") is wrapped in a syft entry and run through
+// grype's package provider (pkg.New). The resulting GolangBinMetadata therefore carries
+// provider-normalized symbols, so fixtures pass the raw names a binary actually carries and exercise
+// the real normalization rather than a hand-prepared copy of it.
+func (b *PackageBuilder) WithGoBinarySymbols(symbolsByImportPath map[string][]string) *PackageBuilder {
+	grypePkg := pkg.New(syftPkg.Package{
+		Metadata: syftPkg.GolangBinaryBuildinfoEntry{Symbols: symbolsByImportPath},
+	})
+	b.pkg.Metadata = grypePkg.Metadata
+	return b
+}
+
 // WithLicenses sets the package licenses.
 func (b *PackageBuilder) WithLicenses(licenses ...string) *PackageBuilder {
 	b.pkg.Licenses = licenses
@@ -154,6 +196,13 @@ func (b *PackageBuilder) WithRelatedPackage(relationshipType artifact.Relationsh
 func (b *PackageBuilder) Build() pkg.Package {
 	if b.pkg.ID == "" {
 		b.pkg.ID = pkg.ID(uuid.New().String())
+	}
+	if b.arch != "" {
+		// arch lives on the rpm metadata contract; stamp it onto any existing RpmMetadata,
+		// otherwise synthesize one (arch-based matching is rpm-only today).
+		m, _ := b.pkg.Metadata.(pkg.RpmMetadata)
+		m.Arch = b.arch
+		b.pkg.Metadata = m
 	}
 	return b.pkg
 }

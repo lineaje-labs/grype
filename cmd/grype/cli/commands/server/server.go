@@ -37,7 +37,16 @@ import (
 	"github.com/anchore/grype/grype/vulnerability"
 	"github.com/anchore/syft/syft"
 	"github.com/anchore/syft/syft/cataloging"
+	syftPkg "github.com/anchore/syft/syft/pkg"
 )
+
+
+var ignoreLinuxKernelHeaders = []match.IgnoreRule{
+	{Package: match.IgnoreRulePackage{Name: "kernel-headers", UpstreamName: "kernel", Type: string(syftPkg.RpmPkg)}, MatchType: match.ExactIndirectMatch},
+	{Package: match.IgnoreRulePackage{Name: "linux(-.*)?-headers-.*", UpstreamName: "linux.*", Type: string(syftPkg.DebPkg)}, MatchType: match.ExactIndirectMatch},
+	{Package: match.IgnoreRulePackage{Name: "linux-libc-dev", UpstreamName: "linux", Type: string(syftPkg.DebPkg)}, MatchType: match.ExactIndirectMatch},
+	{Package: match.IgnoreRulePackage{Name: "linux-kbuild-.*", UpstreamName: "linux.*", Type: string(syftPkg.DebPkg)}, MatchType: match.ExactIndirectMatch},
+}
 
 const defaultRefreshInterval = 2 * time.Hour
 
@@ -101,6 +110,11 @@ func New(cfg Config) (*Server, error) {
 	opts.DB.AutoUpdate = false
 	opts.ByCVE = cfg.ByCVE
 
+	ignore := opts.Ignore
+	if !opts.MatchUpstreamKernelHeaders {
+		ignore = append(ignore, ignoreLinuxKernelHeaders...) // copy of the root.go rules (unexported there)
+	}
+	opts.Ignore = ignore
 	slog.Info("updating vulnerability database…")
 	// Always force-update the DB on startup so the server starts with current data.
 	vp, dbReader, stat, err := grype.LoadVulnerabilityDBWithReader(opts.ToClientConfig(), opts.ToCuratorConfig(), true)

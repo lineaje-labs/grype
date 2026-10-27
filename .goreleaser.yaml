@@ -63,6 +63,17 @@ builds:
     mod_timestamp: *build-timestamp
     ldflags: *build-ldflags
 
+  - id: darwin-server-build
+    dir: ./cmd/grype-server
+    binary: grype-server
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: *build-timestamp
+    ldflags: *build-ldflags
+
   - id: windows-build
     dir: ./cmd/grype
     binary: grype
@@ -82,6 +93,7 @@ archives:
   - id: darwin-archives
     ids:
       - darwin-build
+      - darwin-server-build
 
   - id: windows-archives
     formats: [zip]
